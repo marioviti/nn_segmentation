@@ -20,7 +20,7 @@ def main():
 
     # Load data
     dataset_path = './CD_Dataset'
-    dataset = CD_Dataset( dataset_path )
+    dataset = CD_Dataset( dataset_path, download=True )
 
     # Define Model
     inputs_shape = INPUT_PATCH_SIZE + INPUT_CHANNELS
@@ -35,11 +35,11 @@ def main():
     dataset.fit()
 
     # Train the model
-    losses,accuracy = train( unet, dataset, epochs=EPOCHS, n_batch=N_PATCH_BATCH)
-    print ('loss')
+    scores,losses = train( unet, dataset, epochs=EPOCHS, n_batch=N_PATCH_BATCH)
+    print ('LOSS')
     print (losses)
-    print ('accuracy')
-    print (accuracy)
+    print ('SCORE')
+    print (scores)
 
 if __name__ == '__main__':
     main()

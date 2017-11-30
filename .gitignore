@@ -1,5 +1,7 @@
-# Dataset
+# CD_Dataset
 CD_Dataset
+CD_Dataset/*
+CD_Dataset.zip
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

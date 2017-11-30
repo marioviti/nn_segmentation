@@ -3,6 +3,7 @@ import numpy as np
 import PIL
 from keras.preprocessing.image import random_rotation ,apply_transform, random_zoom, load_img
 from preprocessing import *
+from data_grab import dwuzp
 
 class Dataset_Loader():
     def __init__(self, path, train_x_path = "train_x", train_y_path = "train_y"\
@@ -120,7 +121,10 @@ class Data_Generator():
 
 class CD_Dataset():
 
-    def __init__(self,path="../CD_Dataset",download=True):
+    def __init__(self,path="../CD_Dataset",download=False):
+        if (not os.path.exists(path)) and download:
+            print('Downloading CD_Dataset')
+            dwuzp()
         self.loader = Dataset_Loader(path)
 
     def set_sizes(self, model_input_shape, model_output_shape):

@@ -71,3 +71,4 @@ tensorflow-gpu==1.4.0
     - werkzeug [required: >=0.11.10, installed: 0.12.2]
     - wheel [required: Any, installed: 0.30.0]
   - wheel [required: Any, installed: 0.30.0]
+wget==3.2
