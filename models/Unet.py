@@ -1,17 +1,54 @@
 from layers import *
+from serialize import *
 
 import numpy as np
 
 from keras import backend as K
-from keras.losses import binary_crossentropy
+from keras.losses import binary_crossentropy, categorical_crossentropy
+from keras.utils import to_categorical
 from keras.models import Model
 from keras.optimizers import SGD,Adam
+from keras.layers import ZeroPadding2D
 
 import tensorflow as tf
 
 K.set_image_data_format('channels_last')
 
-def dice_coef(y_true, y_pred, smooth=1.):
+def crop_receptive(batch_y, model_output_size):
+    """
+        Get a cropped batch to fit the perceptive field,
+        the resulting output shape is n,hy,wy,cy.
+
+        args:
+            - batch_y (numpy array) y.shape : n,hx,wx,cy
+            - model_output_size (list) : hy,wy,cy
+    """
+    n,hx,wx,cy = batch_y.shape
+    hy,wy,cy = model_output_size
+    dhq, dhr = (hx-hy)//2, (hx-hy)%2
+    dwq, dwr = (wx-wy)//2, (wx-wy)%2
+    return batch_y[:, dhq: hx - (dhq + dhr), dwq: wx - (dwq + dwr) ]
+
+def expand_receptive(batch_y, model_input_shape):
+    """
+        Get a expantded batch to fit the model_input_shape hx and wx,
+        the resulting output shape is n,hx,wx,cy.
+
+        args:
+            - batch_y (numpy array) y.shape : n,hy,wy,cy
+            - model_input_shape (list) : hx,wx,cx
+    """
+    hx,wx,cx = model_input_shape
+    n,hy,wy,cy = batch_y.shape
+    dhq, dhr = (hx-hy)//2, (hx-hy)%2
+    dwq, dwr = (wx-wy)//2, (wx-wy)%2
+    y_expanded = np.zeros((n,hx,wx,cy))
+    y_expanded[:, dhq: - (dhq + dhr), dwq: - (dwq + dwr) ] = batch_y
+    return y_expanded
+
+# TODO look at this if is working for categoriacal labels
+def dice_coef(y_true, y_pred):
+    smooth = 1.
     y_true_f = K.flatten(y_true)
     y_pred_f = K.flatten(y_pred)
     intersection = K.sum(y_true_f * y_pred_f)
@@ -19,11 +56,6 @@ def dice_coef(y_true, y_pred, smooth=1.):
 
 def dice_coef_loss(y_true, y_pred):
     return -dice_coef(y_true, y_pred)
-
-def weighted_cross_entropy(w):
-    def crossentropy(y_true,y_pred):
-        return binary_crossentropy(y_true,y_pred)
-    return crossentropy
 
 def define_unet_layers(input_shape):
     """
@@ -52,7 +84,7 @@ def define_unet_layers(input_shape):
     layers['up_path'][3] = new_up_level(128,layers['up_path'][2],layers['down_path'][3])
     layers['up_path'][4] = new_up_level(64,layers['up_path'][3],layers['down_path'][4])
 
-    layers['outputs'] = Conv2D(1, (1, 1), activation='sigmoid')(layers['up_path'][4])
+    layers['outputs'] = Conv2D(2, (1, 1), activation='softmax')(layers['up_path'][4])
     return layers
 
 def get_unet_model(input_size):
@@ -61,56 +93,118 @@ def get_unet_model(input_size):
     return model, layers
 
 class Unet():
-    def __init__(self, input_size):
+    def __init__( self, input_shape, loss=categorical_crossentropy, \
+                  metrics=[dice_coef], optimizer=Adam(lr=1e-5) ):
         """
-        params: input_size, channels_last (h,w,c)
+        params:
+            inputs_shape: (tuple) channels_last (h,w,c) of input image.
+            metrics:    (tuple) metrics function for evaluation.
+            optimizer:  (function) Optimization strategy.
         """
-        model, layers = get_unet_model(input_size)
-        sgd = SGD(lr=0.01, decay=1e-6, momentum=0.9, nesterov=True)
+        model, layers = get_unet_model(input_shape)
+        self.model = model
         self.layers = layers
-        self.input_shape = layers['inputs']._keras_shape
+
+        self.inputs_shape = layers['inputs']._keras_shape
         self.outputs_shape = layers['outputs']._keras_shape
 
-        self.model = model
-        #self.model.compile(loss=weighted_cross_entropy(1), optimizer=sgd, metrics=['accuracy'])
-        self.model.compile(optimizer=Adam(lr=1e-5), loss=binary_crossentropy, metrics=['accuracy'])
+        self.loss= loss
+        self.metrics = metrics
+        self.optimizer = optimizer
 
-    def fit(self,x_train,y_train,epochs=5,batch_size=5):
-        self.model.fit(x_train, y_train,
-                        epochs=epochs,batch_size=batch_size)
+        self.compile_model()
 
-    def evaulate(self,x_test, y_test, batch_size=2):
-        self.score = self.model.evaluate(x_test, y_test, batch_size=batch_size)
-        return self.score
+    @property
+    def optimizer(self):
+        return self.optimizer
 
-    def get_model_output_shape(self):
+    @optimizer.setter
+    def optimizer(self, v):
+        self.optimizer = v
+
+    @property
+    def metrics(self):
+        return self.metrics
+
+    @metrics.setter
+    def metrics(self, v):
+        self.metrics = v
+
+    @property
+    def input_shape(self):
+        return self.inputs_shape[1:]
+
+    @property
+    def output_shape(self):
         return self.outputs_shape[1:]
 
-    def get_model_input_shape(self):
-        return self.input_shape
+    def save_model(self, name=None):
+        self.name = self.name if name is None else name
+        save_to( self.model,self.name )
 
-    def predict_batch(self,x,batch_size=1,verbose=0):
-        return self.model.predict(x, batch_size=batch_size, verbose=verbose)
+    def load_model(self, name=None):
+        self.name = self.name if name is None else name
+        self.model = load_from( self.name )
+        self.compile_model()
 
-    def predict(self,x,verbose=0):
-        return self.model.predict(x.reshape([1]+list(x.shape)), batch_size=1, verbose=verbose)
+    def compile_model(self):
+        self.model.compile( optimizer=self.optimizer, \
+                            loss=self.loss, metrics=self.metrics )
 
-#def main():
-#    # Generate dummy data
-#    input_size = [350,350,3]
-#    unet = Unet(input_size)
-#    _,h,w,c = unet.outputs_shape
-#    x_train = np.random.random([5] + input_size)
-#    y_train = np.random.randint(2, size=([5,h,w,c]))
-#    x_test = np.random.random([2] + input_size)
-#    y_test = np.random.randint(2, size=([2,h,w,c]))
-#
-#    unet.fit(x_train,y_train)
-#    unet.evaulate(x_train,y_train)
-#    y_hat = unet.predict(x_train[0])
-#    print(y_hat.shape)
-#    print(unet.get_model_output_shape())
-#    print(unet.score)
-#
-#if __name__ == '__main__':
-#    main()
+    def fit( self, x_train, y_train, batch_size=1, epochs=1, cropped=False ):
+        out_shape = self.output_shape
+        y_train = y_train if cropped else crop_receptive(y_train, out_shape)
+        print (out_shape)
+        print (y_train.shape)
+        self.model.fit( x_train, y_train, \
+                        epochs=epochs, batch_size=batch_size )
+
+    def evaulate( self, x_test,  y_test,  batch_size=1, cropped=False ):
+        out_shape = self.output_shape
+        y_test = y_test if cropped else crop_receptive(y_test, out_shape)
+        self.score = self.model.evaluate(x_test, y_test, batch_size=batch_size )
+        return self.score
+
+    def predict( self, x, batch_size=1, verbose=0 ):
+        return self.model.predict( x, batch_size=batch_size, verbose=verbose )
+
+    def predict_mask( self, x, verbose=0 ):
+        hx,wx,cx = self.input_shape
+        hy,wy,cy = self.output_shape
+        patch = self.predict(x.reshape([1,hx,wx,cx]), verbose=verbose)
+        return expand_receptive(patch,[hx,wx,cy])
+
+    def predict_and_stich( self, X, stride=1 ):
+        hX,wX,cX = X.shape
+        hx,wx,cx = self.input_shape
+        hy,wy,cy = self.output_shape
+        Y = np.zeros((hX,wX,cy))
+        for i in range(hX-hx,stride):
+            for j in range(wX-wx,stride):
+                patch_x = X[ i:i+hx, j:j+wx ]
+                Y[ i:i+hx, j:j+wx ] += predict_mask(patch_x)
+        return Y
+
+
+def main():
+    # Generate dummy data
+    input_size = [350,350,3]
+    unet = Unet(input_size)
+    _,h,w,c = unet.outputs_shape
+    x_train = np.random.random([5,350,350,3])
+    y_train = np.random.randint(2, size=([5,350,350,2]))
+
+    unet.fit(x_train,y_train)
+    unet.evaulate(x_train,y_train)
+    y_hat = unet.predict(x_train[0])
+    print(y_hat.shape)
+    print(unet.get_model_output_shape())
+    print(unet.score)
+
+if __name__ == '__main__':
+    main()
+
+#binary_crossentropy
+#sgd = SGD(lr=0.01, decay=1e-6, momentum=0.9, nesterov=True)
+#self.model.compile(loss=weighted_cross_entropy(1), optimizer=sgd, metrics=['accuracy'])
+#self.model.compile(optimizer=Adam(lr=1e-5), loss=binary_crossentropy, metrics=['accuracy'])

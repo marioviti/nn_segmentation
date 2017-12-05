@@ -106,28 +106,13 @@ def get_patch(x,offset_h,h,offset_w,w):
     """
     return x[offset_h:offset_h+h,offset_w:offset_w+w]
 
-def get_X_Y_patches(x,y,h,w):
+def get_random_X_Y_patches(x,y,h,w):
     """
         Get same random patches for X and Y.
     """
     offset_h = np.random.randint(h)
     offset_w = np.random.randint(w)
     return get_patch(x,offset_h,h,offset_w,w),get_patch(y,offset_h,h,offset_w,w)
-
-def crop_receptive_field(y, model_output_size):
-    """
-        Get a cropped patch to fit the perceptive field.
-
-        args:
-            - y (numpy array) y.shape : h,w,lbls
-            - model_output_size (list) : h1,w1,lbls
-    """
-    bigger_h, bigger_w, c = y.shape
-    smaller_h, smaller_w, c = model_output_size
-    dhq, dhr = (bigger_h - smaller_h)//2, (bigger_h - smaller_h)%2
-    dwq, dwr = (bigger_w - smaller_w)//2, (bigger_w - smaller_w)%2
-    return y[dhq:bigger_h-(dhq+dhr),dwq:bigger_w-(dwq+dwr)].reshape([1]+\
-                                                list(model_output_size))
 
 def get_numpy_from_path(image_path, convert='Label'):
     """
