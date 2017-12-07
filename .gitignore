@@ -1,3 +1,6 @@
+# Models Data
+*.h5
+
 # CD_Dataset
 CD_Dataset
 CD_Dataset/*
