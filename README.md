@@ -19,12 +19,22 @@ Project focused on image segmentation using neural networks.
 ```
 INPUT_PATCH_SIZE = [350,350]
 INPUT_CHANNELS = [3]
-EPOCHS = 10
-N_PATCH_BATCH = 5
+OUTPUT_CHANNELS = 2
+EPOCHS = 20
+N_PATCH_BATCH = 10
+MODEL_NAME = "Unet"
 ```
 * to execute simply run:
 ```
-python main.py
+python training.py
+```
+
+### predict
+
+If a desktop environment is available, visualize the results of the trained network Unet
+* to execute simply run:
+```
+python predict.py
 ```
 
 ## Monitoring
