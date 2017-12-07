@@ -4,7 +4,7 @@ from models import Unet
 import matplotlib.pyplot as plt
 import numpy as np
 
-from utils import train, predict_patch, show_image_x_y, predict_and_show, show_y
+from utils import train, predict_patch, show_image_x_y, predict_and_show, show_y, predictBatchXYandShow
 
 ################################################################################
 ################################## PARAMETERS ##################################
@@ -12,7 +12,7 @@ from utils import train, predict_patch, show_image_x_y, predict_and_show, show_y
 INPUT_PATCH_SIZE = [350,350]
 INPUT_CHANNELS = [3]
 OUTPUT_CHANNELS = 2
-EPOCHS = 20
+EPOCHS = 10
 N_PATCH_BATCH = 10
 MODEL_NAME = "Unet"
 ################################################################################
@@ -25,8 +25,7 @@ def main():
     dataset = CD_Dataset( path=dataset_path, download=True )
     unet = Unet(input_shape)
     unet.load_model(MODEL_NAME)
-    train(unet,dataset, epochs=EPOCHS, n_batch=N_PATCH_BATCH)
-    unet.save_model(MODEL_NAME)
+    predictBatchXYandShow(unet,dataset, n_batch=N_PATCH_BATCH)
 
 if __name__ == '__main__':
     main()

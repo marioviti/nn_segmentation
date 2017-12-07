@@ -57,7 +57,7 @@ def dice_coef(y_true, y_pred):
 def dice_coef_loss(y_true, y_pred):
     return -dice_coef(y_true, y_pred)
 
-def define_unet_layers(input_shape):
+def define_unet_layers(input_shape, classes):
     """
     Use the functional API to define the model
     https://keras.io/getting-started/functional-api-guide/
@@ -84,16 +84,16 @@ def define_unet_layers(input_shape):
     layers['up_path'][3] = new_up_level(128,layers['up_path'][2],layers['down_path'][3])
     layers['up_path'][4] = new_up_level(64,layers['up_path'][3],layers['down_path'][4])
 
-    layers['outputs'] = Conv2D(2, (1, 1), activation='softmax')(layers['up_path'][4])
+    layers['outputs'] = Conv2D(classes, (1, 1), activation='softmax')(layers['up_path'][4])
     return layers
 
-def get_unet_model(input_size):
-    layers = define_unet_layers(input_size)
+def get_unet_model(input_size,classes):
+    layers = define_unet_layers(input_size,classes)
     model = Model(inputs=[layers['inputs']], outputs=[layers['outputs']])
     return model, layers
 
 class Unet():
-    def __init__( self, input_shape, loss=categorical_crossentropy, \
+    def __init__( self, input_shape, classes=2, loss=categorical_crossentropy, \
                   metrics=[dice_coef], optimizer=Adam(lr=1e-5) ):
         """
         params:
@@ -101,7 +101,8 @@ class Unet():
             metrics:    (tuple) metrics function for evaluation.
             optimizer:  (function) Optimization strategy.
         """
-        model, layers = get_unet_model(input_shape)
+        self.classes = classes
+        model, layers = get_unet_model(input_shape, classes)
         self.model = model
         self.layers = layers
 
@@ -185,24 +186,23 @@ class Unet():
                 Y[ i:i+hx, j:j+wx ] += predict_mask(patch_x)
         return Y
 
-
-def main():
-    # Generate dummy data
-    input_size = [350,350,3]
-    unet = Unet(input_size)
-    _,h,w,c = unet.outputs_shape
-    x_train = np.random.random([5,350,350,3])
-    y_train = np.random.randint(2, size=([5,350,350,2]))
-
-    unet.fit(x_train,y_train)
-    unet.evaulate(x_train,y_train)
-    y_hat = unet.predict(x_train[0])
-    print(y_hat.shape)
-    print(unet.get_model_output_shape())
-    print(unet.score)
-
-if __name__ == '__main__':
-    main()
+#def main():
+#    # Generate dummy data
+#    input_size = [350,350,3]
+#    unet = Unet(input_size)
+#    _,h,w,c = unet.outputs_shape
+#    x_train = np.random.random([5,350,350,3])
+#    y_train = np.random.randint(2, size=([5,350,350,2]))
+#
+#    unet.fit(x_train,y_train)
+#    unet.evaulate(x_train,y_train)
+#    y_hat = unet.predict(x_train[0])
+#    print(y_hat.shape)
+#    print(unet.get_model_output_shape())
+#    print(unet.score)
+#
+#if __name__ == '__main__':
+#    main()
 
 #binary_crossentropy
 #sgd = SGD(lr=0.01, decay=1e-6, momentum=0.9, nesterov=True)
