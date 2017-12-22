@@ -5,7 +5,9 @@ def train(model, dataset, epochs=10, n_batch=5):
     h,w,_ = model.input_shape
     metrics = np.zeros(epochs)
     losses = np.zeros(epochs)
+    print("starging trainig process")
     for i in range(epochs):
+        print("main-epoch: "+str(i))
         x_train,y_train = dataset.get_X_Y_patch_batch([h,w],n_batch=n_batch)
         model.fit(x_train,y_train)
         model.evaulate(x_train,y_train)
@@ -42,6 +44,7 @@ def predictBatchXYandShow(model, dataset, n_batch=25):
     x = crop_receptive(x,y_hat.shape[1:])
     y = crop_receptive(y,y_hat.shape[1:])
     fig = plt.figure()
+    print("starging prediction process")
     for i in range(n_batch):
         x_image = to_image(x[i])
         y_image = dataset.Y_to_image(y[i])

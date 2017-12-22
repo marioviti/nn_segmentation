@@ -22,7 +22,7 @@ def main():
 
     # Load data
     dataset_path = './CD_Dataset'
-    dataset = CD_Dataset( path=dataset_path, download=True )
+    dataset = CD_Dataset( path=dataset_path, download=True, fit=True )
     unet = Unet(input_shape)
     unet.load_model(MODEL_NAME)
     predictBatchXYandShow(unet,dataset, n_batch=N_PATCH_BATCH)

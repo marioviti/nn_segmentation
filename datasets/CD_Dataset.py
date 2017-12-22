@@ -76,13 +76,14 @@ class Data_Generator():
         self.std_features = None
         self.fitted = False
         self.example_id = 0
+        self.N = len(self.train_x)
+
 
     def fit(self):
         """
             preprocessing pre-step:
                 calculate mean, std featurewise (out of memory).
         """
-        self.N = len(self.train_x)
         N = self.N
         for idx in range(N):
             datax = np.array(self.train_x[idx])/255.
@@ -126,7 +127,7 @@ class Data_Generator():
         cy = self.classes
         patch_ax, patch_ay = get_random_X_Y_patches(x,y,h,w)
         patch_ax, patch_ay = patch_ax/255., patch_ay/255
-        patch_ay = to_categorical(patch_ay, num_classes=cy)
+        patch_ay = to_categorical(patch_ay, num_classes=cy).reshape(w,w,cy)
         _,_,cx = patch_ax.shape
         _,_,cy = patch_ay.shape
         if self.fitted:
