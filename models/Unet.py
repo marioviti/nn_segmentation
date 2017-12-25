@@ -155,6 +155,8 @@ class Unet():
     def fit( self, x_train, y_train, batch_size=1, epochs=1, cropped=False ):
         out_shape = self.output_shape
         y_train = y_train if cropped else crop_receptive(y_train, out_shape)
+        print (out_shape)
+        print (y_train.shape)
         self.model.fit( x_train, y_train, \
                         epochs=epochs, batch_size=batch_size )
 
@@ -183,3 +185,26 @@ class Unet():
                 patch_x = X[ i:i+hx, j:j+wx ]
                 Y[ i:i+hx, j:j+wx ] += predict_mask(patch_x)
         return Y
+
+#def main():
+#    # Generate dummy data
+#    input_size = [350,350,3]
+#    unet = Unet(input_size)
+#    _,h,w,c = unet.outputs_shape
+#    x_train = np.random.random([5,350,350,3])
+#    y_train = np.random.randint(2, size=([5,350,350,2]))
+#
+#    unet.fit(x_train,y_train)
+#    unet.evaulate(x_train,y_train)
+#    y_hat = unet.predict(x_train[0])
+#    print(y_hat.shape)
+#    print(unet.get_model_output_shape())
+#    print(unet.score)
+#
+#if __name__ == '__main__':
+#    main()
+
+#binary_crossentropy
+#sgd = SGD(lr=0.01, decay=1e-6, momentum=0.9, nesterov=True)
+#self.model.compile(loss=weighted_cross_entropy(1), optimizer=sgd, metrics=['accuracy'])
+#self.model.compile(optimizer=Adam(lr=1e-5), loss=binary_crossentropy, metrics=['accuracy'])

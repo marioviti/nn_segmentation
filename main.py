@@ -23,8 +23,8 @@ global EPOCHS
 global N_PATCH_BATCH
 
 DATASET_PATH = './CD_Dataset'
-EPOCHS = 10
-N_PATCH_BATCH = 10
+EPOCHS = 50
+N_PATCH_BATCH = 5
 
 ################################################################################
 ############################ MODEL PARAMETERS ##################################
