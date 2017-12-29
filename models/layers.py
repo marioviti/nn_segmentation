@@ -26,8 +26,14 @@ def crop_concatenate(bigger_input, smaller_input):
     cropped_input = crop_to(bigger_input_size,smaller_input_size)(bigger_input)
     return concatenate([cropped_input,smaller_input],axis=3)
 
-def cnv3x3Relu(filters):
-    return Conv2D(filters, (3, 3), activation='relu', padding='valid')
+def cnv3x3Relu(filters, regularized=False):
+    layer = Conv2D( filters, (3,3),
+                    kernel_regularizer=regularizers.l2(0.01),
+                    activation='relu',
+                    padding='valid') \
+            if regularized else \
+            Conv2D(filters, (3, 3), activation='relu', padding='valid')
+    return layer
 
 def downsample(pool_size=(2, 2)):
     return MaxPool2D(pool_size=pool_size)
@@ -36,13 +42,13 @@ def upsample(filters):
     return Conv2DTranspose(filters, (2, 2), strides=(2,2), padding='valid',
                             activation='relu')
 
-def new_down_level(filters, inputs):
+def new_down_level(filters, inputs, regularized=False):
     """
         Contracting layer block
     """
     outputs= downsample()(inputs)
-    outputs = cnv3x3Relu(filters)(outputs)
-    outputs = cnv3x3Relu(filters)(outputs)
+    outputs = cnv3x3Relu(filters,regularized=regularized)(outputs)
+    outputs = cnv3x3Relu(filters,regularized=regularized)(outputs)
     return outputs
 
 def new_up_level(filters, up_input, right_input):

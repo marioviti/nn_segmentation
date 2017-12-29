@@ -1,5 +1,6 @@
 # Models Data
 *.h5
+*.json
 
 # CD_Dataset
 CD_Dataset

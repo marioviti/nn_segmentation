@@ -4,15 +4,18 @@ from keras.preprocessing.image import random_rotation ,apply_transform, random_z
 from keras.utils.np_utils import to_categorical
 
 import numpy as np
+import time
 import os
-
 import PIL
-from preprocessing import *
+from utils import sample_patches
 
+np.random.seed(int((time.time()*1e6)%1e6))
 
 class Dataset_Loader():
-    def __init__(self, path, train_x_path = "train_x", train_y_path = "train_y"\
-                            ,eval_x_path = "eval_x", eval_y_path = "eval_y" ):
+    def __init__(self, path, train_x_path = "train_x",
+                             train_w_path = "train_w",
+                             train_y_path = "train_y",
+                             eval_x_path = "eval_x", eval_y_path = "eval_y" ):
         """
             path/
                 train_x_path/
@@ -27,17 +30,22 @@ class Dataset_Loader():
         """
         self.path = path
         self.train_x_path = os.path.join(path,train_x_path)
+        self.train_w_path = os.path.join(path,train_w_path)
         self.train_y_path = os.path.join(path,train_y_path)
         self.eval_x_path = os.path.join(path,eval_x_path)
         self.eval_y_path = os.path.join(path,eval_y_path)
 
         self.train_x_directory_list = sorted(os.listdir(self.train_x_path))
+        self.train_w_directory_list = sorted(os.listdir(self.train_w_path))
         self.train_y_directory_list = sorted(os.listdir(self.train_y_path))
         self.eval_x_directory_list = sorted(os.listdir(self.eval_x_path))
         self.eval_y_directory_list = sorted(os.listdir(self.eval_y_path))
 
         self.train_x = [PIL.Image.open(os.path.join(self.train_x_path,x))\
                                         for x in self.train_x_directory_list]
+        self.train_w = [PIL.Image.open(\
+                            os.path.join(self.train_w_path,w)).convert('L')\
+                                        for w in self.train_w_directory_list]
         self.train_y = [PIL.Image.open(\
                             os.path.join(self.train_y_path,y)).convert('L')\
                                         for y in self.train_y_directory_list]
@@ -49,13 +57,14 @@ class Dataset_Loader():
 
     def get_data_all(self):
         """
-            return train_x, train_y, eval_x, eval_y as PIL images lists
+            return train_x, train_w, train_y, eval_x, eval_y as PIL images lists
         """
-        return self.train_x, self.train_y, self.eval_x, self.eval_y
+        return self.train_x, self.train_w, self.train_y, self.eval_x, self.eval_y
 
 
-class Data_Generator():
-    def __init__(self, train_x, train_y, eval_x=None, eval_y=None, classes=2):
+class Data_Sampler():
+    def __init__(self, train_x, train_w, train_y,
+                       eval_x=None, eval_y=None, num_classes=2):
         """
             Args:
                 - train_x : (PIL.Image pointers list)
@@ -64,98 +73,150 @@ class Data_Generator():
                 - classes : (int) number of classes for categorical encoding.
         """
         self.train_x = train_x
+        self.train_w = train_w
         self.train_y = train_y
         self.eval_x = eval_x
         self.eval_y = eval_y
-        self.next_train_x = None
-        self.next_train_y = None
-        self.next_eval_x = None
-        self.next_eval_y = None
-        self.classes = classes
+        self.num_examples = len(self.train_x)
+        self.eval_num_examples = len(self.eval_x)
+        self.num_classes = num_classes
         self.mean_features = None
         self.std_features = None
         self.fitted = False
-        self.example_id = 0
+        self.curr_example_id = 0
+        self.eval_curr_example_id = 0
+
+    @property
+    def mean_features(self):
+        return self.mean_features
+
+    @mean_features.setter
+    def mean_features(self, v):
+        self.mean_features = v
+
+    @property
+    def std_features(self):
+        return self.mean_features
+
+    @std_features.setter
+    def std_features(self, v):
+        self.std_features = v
+
+    def get_next_index(self,train=True):
+        if train:
+            N = self.num_examples
+            self.curr_example_id = (self.curr_example_id+1)%N
+            return self.curr_example_id
+        else:
+            N = self.eval_num_examples
+            self.eval_curr_example_id = (self.eval_curr_example_id+1)%N
+            return self.eval_curr_example_id
+
+    def get_random_index(self,train=True):
+        N = self.num_examples if train else self.eval_num_examples
+        return np.random.randint(N)
+
+    def get_curr_index(self,train=True):
+        return self.curr_example_id if train else self.eval_curr_example_id
 
     def fit(self):
         """
             preprocessing pre-step:
                 calculate mean, std featurewise (out of memory).
         """
-        self.N = len(self.train_x)
-        N = self.N
-        for idx in range(N):
+        N = self.num_examples
+        datax = np.array(self.train_x[0])/255.
+        H,W = datax.shape[0:2]
+        self.mean_features = np.sum(datax,axis=(0,1))
+        for idx in range(1,N):
             datax = np.array(self.train_x[idx])/255.
-            H,W = datax.shape[0:2]
-            if self.mean_features is None:
-                self.mean_features = np.sum(datax,axis=(0,1))/(N*H*W*1.0)
-            else:
-                self.mean_features += np.sum(datax,axis=(0,1))/(N*H*W*1.0)
+            self.mean_features += np.sum(datax,axis=(0,1))
+        self.mean_features /= (N*H*W*1.0)
+        datax = np.array(self.train_x[0])/255.
+        H,W = datax.shape[0:2]
+        datax = datax - self.mean_features
+        datax = datax**2
+        self.std_features = np.sum(datax,axis=(0,1))
         for idx in range(N):
             datax = np.array(self.train_x[idx])/255.
             H,W = datax.shape[0:2]
             datax = datax - self.mean_features
             datax = datax**2
-            if self.std_features is None:
-                self.std_features = np.sum(datax,axis=(0,1))/(N*H*W*1.0-1.0)
-            else:
-                self.std_features += np.sum(datax,axis=(0,1))/(N*H*W*1.0-1.0)
+            self.std_features += np.sum(datax,axis=(0,1))
+        self.std_features /= (N*H*W*1.0-1.0)
+        print("mean_features: ",self.mean_features)
+        print("std_features: ",self.std_features)
         self.fitted = True
 
-    def get_Y(self, index=0, eval_=True):
-        """
-            args:
-        """
-        y = np.array(self.eval_y[index] if eval_ else self.train_y[index])
-        return y
-
-    def get_X(self, index=0, fitted=True, eval_=True):
-        """
-            args:
-                -fitted (boolean) : if fitted the example preprocessed
-        """
-        x = np.array(self.eval_x[index] if eval_ else self.train_x[index])
-        if self.fitted and fitted:
-            x = (x/255.0 - self.mean_features)/(self.std_features+1e-10)
-        return x
-
-    def get_X_Y_patches(self,x,y,h,w):
+    def sample_X_Y_patches(self,patch_size,X,Y,offsets=[None,None]):
         """
             get same random patch and apply mean std featurewise normalization.
         """
-        cy = self.classes
-        patch_ax, patch_ay = get_random_X_Y_patches(x,y,h,w)
-        patch_ax, patch_ay = patch_ax/255., patch_ay/255
-        h_,w_ = patch_ay.shape
-        patch_ay = to_categorical(patch_ay, num_classes=cy).reshape(h_,w_,cy)
-        _,_,cx = patch_ax.shape
-        _,_,cy = patch_ay.shape
+        cy = self.num_classes
+        h,w = patch_size
+        offset_h,offset_w = offsets
+        patch_ax, patch_ay = sample_patches([X,Y],h,w,offset_h=offset_h,offset_w=offset_w)
+        patch_ax, patch_ay = patch_ax/255., patch_ay/((256//(cy-1))-1)
+        patch_ay = to_categorical(patch_ay, num_classes=cy).reshape(h,w,cy)
         if self.fitted:
             patch_ax = (patch_ax - self.mean_features)/(self.std_features+1e-10)
-        return patch_ax.reshape([1,h,w,cx]), patch_ay.reshape([1,h,w,cy])
+        return np.expand_dims(patch_ax, axis=0), np.expand_dims(patch_ay, axis=0)
 
-    def get_X_Y_patch_batch(self, patch_size, n_batch=10, \
-                            shuffle=True, same=False):
+    def sample_X_YW_patches(self,patch_size,X,W,Y,offsets=[None,None]):
+        """
+            get same random patch and apply mean std featurewise normalization.
+        """
+        cy = self.num_classes
+        h,w = patch_size
+        patch_ax, patch_aw, patch_ay = sample_patches([X,W,Y],h,w)
+        patch_ax, patch_ay = patch_ax/255., patch_ay/((256//(cy-1))-1)
+        patch_aw = patch_aw/255.
+        patch_ay = to_categorical(patch_ay, num_classes=cy).reshape(h,w,cy)
+        patch_ayw = np.array(patch_ay,copy=True)
+        for c in range(cy):
+            patch_ayw[:,:,c] += patch_aw
+        patch_ayw*=patch_ay
+        if self.fitted:
+            patch_ax = (patch_ax - self.mean_features)/(self.std_features+1e-10)
+        return np.expand_dims(patch_ax, axis=0), np.expand_dims(patch_ayw, axis=0)
+
+    # Sample patch main method
+    # First select the correct index according to a combination of parameters
+    # same, shuffle.
+    # X,W,Y are sampled from the database (training or eval)
+    # a patch is sampled and n_batch times and all are stacked in a batch
+    # of size (n_batch,patch_size,feature channels) and
+    #         (n_batch,patch_size,classes)
+    def sample_X_Y_patch_batch(self, patch_size, n_batch=10,
+                                     offsets = [None,None],
+                                     YW=False, train=True,
+                                     shuffle=True, same=False):
         """
             args:
-                patch_size (tuple) : hx, wx height and width window patch sizes
+                patch_size (tuple) : h, w height and width window patch sizes
         """
         assert(n_batch>0)
-        N = self.N
-        hx,wx = patch_size
-        self.example_id = (self.example_id+1)%N if not same else self.example_id
-        idx = np.random.randint(N) if shuffle else self.example_id
-        datax, datay = np.array(self.train_x[idx]), np.array(self.train_y[idx])
-        batch_x, batch_y  = self.get_X_Y_patches( datax,datay,hx,wx )
+        idx = self.get_curr_index(train=train) if same else (self.get_random_index(train=train) \
+                                        if shuffle else self.get_next_index(train=train))
+        datax, datay, dataw = None,None,None
+        if train:
+            datax, datay = np.array(self.train_x[idx]), np.array(self.train_y[idx])
+            dataw = np.array(self.train_w[idx]) if YW else None
+        else:
+            datax, datay = np.array(self.eval_x[idx]), np.array(self.eval_y[idx])
+        batch_x, batch_y  = self.sample_X_YW_patches(patch_size,datax,dataw,datay,offsets=offsets) \
+                        if YW else self.sample_X_Y_patches( patch_size,datax,datay,offsets=offsets )
         for i in range(1,n_batch):
-            patch_x, patch_y = self.get_X_Y_patches( datax,datay,hx,wx )
+            patch_x, patch_y = self.sample_X_YW_patches(patch_size,datax,dataw,datay,offsets=offsets) \
+                            if YW else self.sample_X_Y_patches( patch_size,datax,datay,offsets=offsets )
             batch_x = np.concatenate( (batch_x,patch_x), axis=0 )
             batch_y = np.concatenate( (batch_y,patch_y), axis=0 )
         return batch_x,batch_y
 
+
 class CD_Dataset():
-    def __init__( self, path="../CD_Dataset",\
-                  download=False, fit=True, classes=2 ):
+    def __init__( self, path="../CD_Dataset",
+                  download=False, fit=True, num_classes=2 ):
         """
           Args:
               - path : to dataset main folder
@@ -167,37 +228,17 @@ class CD_Dataset():
             print( 'Downloading CD_Dataset' )
             dwuzp()
         self.loader = Dataset_Loader(path)
-        x_train, y_train, x_eval, y_eval = self.loader.get_data_all()
-        self.generator = Data_Generator( x_train, y_train, \
-                                         x_eval, y_eval, classes=classes )
+        x_train, w_trian, y_train, x_eval, y_eval = self.loader.get_data_all()
+        self.sampler = Data_Sampler( x_train, w_trian, y_train,
+                                     x_eval, y_eval, num_classes=num_classes )
         if fit:
-            self.fit()
+            self.sampler.fit()
 
-    def fit(self):
-        self.generator.fit()
+    def sample_X_Y_patch_batch( self, patch_size, **kwargs ):
+        return self.sampler.sample_X_Y_patch_batch( patch_size, **kwargs )
 
-    def get_X_Y_patch_batch( self, patch_size, shuffle=True, n_batch=10, \
-                             same=False ):
-        return self.generator.get_X_Y_patch_batch( patch_size,\
-                                                   shuffle=shuffle,\
-                                                   n_batch=n_batch, same=same )
-
-    def get_X( self, index=0, fitted=True, eval_=False ):
-        """
-            get index example X
-        """
-        return self.generator.get_X( index=index, fitted=fitted, eval_=eval_ )
-
-    def get_Y( self, index=0, eval_=False ):
-        """
-            get index example Y
-        """
-        return self.generator.get_Y( index=index, eval_=eval_ )
-
-    def Y_to_image(self, y):
-        """
-            from categorical to discreete values for visualiazation
-            args:
-                y (np.array) categorical data
-        """
-        return np.argmax(y,axis=2)
+    def sample_XY_patch_at(self,patch_size,offsets,train=True,same=False):
+        return self.sampler.sample_X_Y_patch_batch( patch_size, n_batch=1,
+                                         offsets = offsets,
+                                         YW=False, train=train,
+                                         shuffle=False, same=same)

@@ -7,9 +7,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 import string
+import time
+
 import random
 from utils import train, predict_patch, show_image_x_y,\
                   predict_and_show, show_y, predictBatchXYandShow
+
+np.random.seed(int((time.time()*1e6)%1e6))
 
 ################################################################################
 ########################## SESSION ARGUMENTS ###################################
@@ -57,22 +61,29 @@ def main():
     # Parsing arguments
     parser = argparse.ArgumentParser()
     parser.add_argument("-trn","--training",
-                            help="specify if trainig session", action="store_true")
+                        help="specify if trainig session", action="store_true")
     parser.add_argument("-tst","--testing",
-                            help="specify if testing session", action="store_true")
+                        help="specify if testing session", action="store_true")
+    parser.add_argument("-epc","--epochs",
+                        help="number of epochs", type=int, default=10)
+    parser.add_argument("-btc","--n_batch",
+                        help="number of examples per batch", type=int, default=5)
     parser.add_argument("-ldmd","--load_model",
-                            help="specify model path/name, the script will load the\
+                        help="specify model path/name, the script will load the\
                             path/name.h5 and path/name.json files")
 
     # Passing arguments to session
     args = parser.parse_args()
     MODEL_TRAINING_SESSION = args.training
+    EPOCHS = args.epochs
+    N_PATCH_BATCH = args.n_batch
     MODEL_TESTING_SESSION = args.testing
     if args.load_model is not None:
         MODEL_PATH_NAME = args.load_model
         LOAD_MODEL = True
     else:
         MODEL_PATH_NAME = id_generator()
+        print("no model selected creating a new one: "+MODEL_PATH_NAME)
         LOAD_MODEL = False
     run_model()
 
@@ -96,7 +107,6 @@ def run_model():
     elif MODEL_TESTING_SESSION:
         print('testing model')
         predictBatchXYandShow(unet, dataset, n_batch=N_PATCH_BATCH)
-
     else:
         print("no mode selected: add option --help to see mode options.")
 

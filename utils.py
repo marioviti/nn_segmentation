@@ -6,7 +6,8 @@ def train(model, dataset, epochs=10, n_batch=5):
     metrics = np.zeros(epochs)
     losses = np.zeros(epochs)
     for i in range(epochs):
-        x_train,y_train = dataset.get_X_Y_patch_batch([h,w],n_batch=n_batch)
+        print("================epoch {}=================".format(i))
+        x_train,y_train = dataset.sample_X_Y_patch_batch([h,w],YW=True,n_batch=n_batch)
         model.fit(x_train,y_train)
         model.evaulate(x_train,y_train)
         loss, metric = model.score
@@ -17,6 +18,14 @@ def train(model, dataset, epochs=10, n_batch=5):
 def to_image(x):
     mn,mx = np.min(x), np.max(x)
     return (x - mn)/float(mx-mn)
+
+def Y_to_image(Y):
+    """
+        from categorical to discreete values for visualiazation
+        args:
+            y (np.array) categorical data
+    """
+    return np.argmax(Y,axis=2)
 
 def crop_receptive(batch, crop_size):
     """
@@ -35,7 +44,7 @@ def crop_receptive(batch, crop_size):
 
 def predictBatchXYandShow(model, dataset, n_batch=25):
     h,w,_ = model.input_shape
-    x, y = dataset.get_X_Y_patch_batch([h,w],n_batch=n_batch)
+    x, y = dataset.sample_X_Y_patch_batch([h,w],n_batch=n_batch,train=True)
     y_hat = model.predict(x)
     model.evaulate(x,y)
     loss, metric = model.score
@@ -44,8 +53,8 @@ def predictBatchXYandShow(model, dataset, n_batch=25):
     fig = plt.figure()
     for i in range(n_batch):
         x_image = to_image(x[i])
-        y_image = dataset.Y_to_image(y[i])
-        y_image_hat = dataset.Y_to_image(y_hat[i])
+        y_image = Y_to_image(y[i])
+        y_image_hat = Y_to_image(y_hat[i])
         a=fig.add_subplot(n_batch,3,i*3+1)
         imgplot = plt.imshow(x_image)
         a.set_title('X')

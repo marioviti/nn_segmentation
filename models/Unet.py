@@ -57,7 +57,7 @@ def dice_coef(y_true, y_pred):
 def dice_coef_loss(y_true, y_pred):
     return -dice_coef(y_true, y_pred)
 
-def define_unet_layers(input_shape, classes):
+def define_unet_layers(input_shape, classes, regularized=False):
     """
     Use the functional API to define the model
     https://keras.io/getting-started/functional-api-guide/
@@ -71,13 +71,15 @@ def define_unet_layers(input_shape, classes):
 
     layers['inputs'] = Input(input_shape)
 
-    layers['down_path'][4] = cnv3x3Relu(64)(layers['inputs'])
-    layers['down_path'][4] = cnv3x3Relu(64)(layers['down_path'][4])
-    layers['down_path'][3] = new_down_level(128,layers['down_path'][4])
-    layers['down_path'][2] = new_down_level(256,layers['down_path'][3])
-    layers['down_path'][1] = new_down_level(512,layers['down_path'][2])
+    layers['down_path'][4] = cnv3x3Relu(64,
+                            regularized=regularized)(layers['inputs'])
+    layers['down_path'][4] = cnv3x3Relu(64,
+                            regularized=regularized)(layers['down_path'][4])
+    layers['down_path'][3] = new_down_level(128,layers['down_path'][4],regularized=regularized)
+    layers['down_path'][2] = new_down_level(256,layers['down_path'][3],regularized=regularized)
+    layers['down_path'][1] = new_down_level(512,layers['down_path'][2],regularized=regularized)
 
-    layers['bottle_neck'] = new_down_level(1024,layers['down_path'][1])
+    layers['bottle_neck'] = new_down_level(1024,layers['down_path'][1],regularized=regularized)
 
     layers['up_path'][1] = new_up_level(512,layers['bottle_neck'],layers['down_path'][1])
     layers['up_path'][2] = new_up_level(256,layers['up_path'][1],layers['down_path'][2])
@@ -87,13 +89,15 @@ def define_unet_layers(input_shape, classes):
     layers['outputs'] = Conv2D(classes, (1, 1), activation='softmax')(layers['up_path'][4])
     return layers
 
-def get_unet_model(input_size,classes):
-    layers = define_unet_layers(input_size,classes)
+def get_unet_model(input_size,classes,regularized=False):
+    layers = define_unet_layers(input_size,classes,regularized=regularized)
     model = Model(inputs=[layers['inputs']], outputs=[layers['outputs']])
     return model, layers
 
 class Unet():
-    def __init__( self, input_shape, classes=2, loss=categorical_crossentropy, \
+    def __init__( self, input_shape, classes=2,
+                  regularized = False,
+                  loss=categorical_crossentropy,
                   metrics=[dice_coef], optimizer=Adam(lr=1e-5) ):
         """
         params:
@@ -102,7 +106,7 @@ class Unet():
             optimizer:  (function) Optimization strategy.
         """
         self.classes = classes
-        model, layers = get_unet_model(input_shape, classes)
+        model, layers = get_unet_model(input_shape, classes, regularized=regularized)
         self.model = model
         self.layers = layers
 
