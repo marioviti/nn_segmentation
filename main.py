@@ -5,15 +5,17 @@ from models import Unet
 
 import matplotlib.pyplot as plt
 import numpy as np
+import os
 
 import string
 import time
 
 import random
 from utils import train, predict_patch, show_image_x_y,\
-                  predict_and_show, show_y, predictBatchXYandShow
+                  predictXYandShow, show_y, predictBatchXYandShow
 
 np.random.seed(int((time.time()*1e6)%1e6))
+# TODO CHECKEEERROR IN DATASET!!!
 
 ################################################################################
 ########################## SESSION ARGUMENTS ###################################
@@ -25,8 +27,10 @@ global MODEL_TESTING_SESSION
 global LOAD_MODEL
 global EPOCHS
 global N_PATCH_BATCH
+global IMAGE_INDEX
 
 DATASET_PATH = './CD_Dataset'
+TRAINED_PATH = './trained_models'
 EPOCHS = 50
 N_PATCH_BATCH = 5
 
@@ -54,6 +58,8 @@ def main():
     global LOAD_MODEL
     global EPOCHS
     global N_PATCH_BATCH
+    global IMAGE_INDEX
+
     global INPUT_PATCH_SIZE
     global INPUT_CHANNELS
     global OUTPUT_CHANNELS
@@ -64,6 +70,8 @@ def main():
                         help="specify if trainig session", action="store_true")
     parser.add_argument("-tst","--testing",
                         help="specify if testing session", action="store_true")
+    parser.add_argument("-imid","--image_index",
+                        help="specify an image for testing", type=int)
     parser.add_argument("-epc","--epochs",
                         help="number of epochs", type=int, default=10)
     parser.add_argument("-btc","--n_batch",
@@ -78,11 +86,15 @@ def main():
     EPOCHS = args.epochs
     N_PATCH_BATCH = args.n_batch
     MODEL_TESTING_SESSION = args.testing
+    if args.image_index is not None and MODEL_TESTING_SESSION:
+        IMAGE_INDEX = args.image_index
+    else:
+        IMAGE_INDEX = -1
     if args.load_model is not None:
         MODEL_PATH_NAME = args.load_model
         LOAD_MODEL = True
     else:
-        MODEL_PATH_NAME = id_generator()
+        MODEL_PATH_NAME = os.path.join(TRAINED_PATH,id_generator())
         print("no model selected creating a new one: "+MODEL_PATH_NAME)
         LOAD_MODEL = False
     run_model()
@@ -106,7 +118,10 @@ def run_model():
 
     elif MODEL_TESTING_SESSION:
         print('testing model')
-        predictBatchXYandShow(unet, dataset, n_batch=N_PATCH_BATCH)
+        if IMAGE_INDEX > -1:
+            predictXYandShow(unet, dataset, IMAGE_INDEX)
+        else:
+            predictBatchXYandShow(unet, dataset, n_batch=N_PATCH_BATCH)
     else:
         print("no mode selected: add option --help to see mode options.")
 

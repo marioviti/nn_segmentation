@@ -119,6 +119,7 @@ class Data_Sampler():
     def get_curr_index(self,train=True):
         return self.curr_example_id if train else self.eval_curr_example_id
 
+
     def fit(self):
         """
             preprocessing pre-step:
@@ -148,6 +149,22 @@ class Data_Sampler():
         print("std_features: ",self.std_features)
         self.fitted = True
 
+    def get_X_Y(self, index=None, shuffle=True, train=True):
+        idx = self.get_curr_index()
+        idx = self.get_random_index(train=train) if shuffle else idx
+        idx = index if index is not None else idx
+        setX = self.train_x if train else self.eval_x
+        setY = self.train_y if train else self.eval_y
+        cy = self.num_classes
+        X = np.array(setX[idx])/255.
+        #Y = np.array(setY[idx])//((256//(cy-1))-1)
+        Y = np.array(setY[idx])/255
+        if self.fitted:
+            X = (X - self.mean_features)/(self.std_features+1e-10)
+        h,w = Y.shape
+        Y = to_categorical(Y, num_classes=cy)
+        return X,Y
+
     def sample_X_Y_patches(self,patch_size,X,Y,offsets=[None,None]):
         """
             get same random patch and apply mean std featurewise normalization.
@@ -156,8 +173,8 @@ class Data_Sampler():
         h,w = patch_size
         offset_h,offset_w = offsets
         patch_ax, patch_ay = sample_patches([X,Y],h,w,offset_h=offset_h,offset_w=offset_w)
-        patch_ax, patch_ay = patch_ax/255., patch_ay/((256//(cy-1))-1)
-        patch_ay = to_categorical(patch_ay, num_classes=cy).reshape(h,w,cy)
+        patch_ax, patch_ay = patch_ax/255., patch_ay/255
+        patch_ay = to_categorical(patch_ay, num_classes=cy)
         if self.fitted:
             patch_ax = (patch_ax - self.mean_features)/(self.std_features+1e-10)
         return np.expand_dims(patch_ax, axis=0), np.expand_dims(patch_ay, axis=0)
@@ -237,8 +254,11 @@ class CD_Dataset():
     def sample_X_Y_patch_batch( self, patch_size, **kwargs ):
         return self.sampler.sample_X_Y_patch_batch( patch_size, **kwargs )
 
+    def get_X_Y(self,*args,**kwargs):
+        return self.sampler.get_X_Y(*args,**kwargs)
+
     def sample_XY_patch_at(self,patch_size,offsets,train=True,same=False):
         return self.sampler.sample_X_Y_patch_batch( patch_size, n_batch=1,
-                                         offsets = offsets,
-                                         YW=False, train=train,
-                                         shuffle=False, same=same)
+                                                     offsets = offsets,
+                                                     YW=False, train=train,
+                                                     shuffle=False, same=same)
