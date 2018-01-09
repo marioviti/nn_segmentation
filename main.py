@@ -11,7 +11,7 @@ import string
 import time
 
 import random
-from utility import train, predictBatchXYandShow
+from utility import train, train_and_save, predictBatchXYandShow
 
 np.random.seed(int((time.time()*1e6)%1e6))
 # TODO CHECKEEERROR IN DATASET!!!
