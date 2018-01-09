@@ -112,7 +112,7 @@ def run_model():
     if MODEL_TRAINING_SESSION:
         print("trainig model")
         print
-        train(unet,datamanager, epochs=EPOCHS, n_batch=N_PATCH_BATCH)
+        train_and_save(unet,datamanager,MODEL_PATH_NAME,epochs=EPOCHS, n_batch=N_PATCH_BATCH)
         print("saving model " + MODEL_PATH_NAME + " to disk.")
         unet.save_model(MODEL_PATH_NAME)
 

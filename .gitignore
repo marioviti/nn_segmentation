@@ -1,5 +1,4 @@
 # Models Data
-trained_models
 *.h5
 *.json
 
