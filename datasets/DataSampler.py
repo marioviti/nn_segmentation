@@ -8,8 +8,8 @@ class DataSampler():
         self.num_classes = num_classes
         self.dataholder = dataholder
 
-    # return total number of patches from_images*batch_size
-    def get_batch_patches(self, h, w, from_images=3, batch_size=4,
+    # return total number of patches from_images*n_batch
+    def get_batch_patches(self, h, w, from_images=2, n_batch=4,
                             rotation_range=20,
                             as_is=False,
                             acceptance=True,
@@ -19,16 +19,16 @@ class DataSampler():
             return cat_batches: [Xs,Ys], [Xs,Ys,Ws]
         """
         images = images_random_rotate(images_to_numpy(self.dataholder.get_next(**kwargs)))
-        cat_batches = batch_patches(images,batch_size,h,w)
+        cat_batches = batch_patches(images,n_batch,h,w)
         N_batches = len(cat_batches)
         max_iterations = 30
         for i in range(1,from_images):
             iterations = 0
             not_accepted = True
             images = images_random_rotate(images_to_numpy(self.dataholder.get_next(**kwargs)))
-            batches = batch_patches(images,batch_size,h,w)
+            batches = batch_patches(images,n_batch,h,w)
             while(not_accepted and acceptance and iterations<max_iterations):
-                batches = batch_patches(images,batch_size,h,w)
+                batches = batch_patches(images,n_batch,h,w)
                 y_batch = batches[y_index]
                 not_accepted = refuse_batch(y_batch)
                 iterations += 1
