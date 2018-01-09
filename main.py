@@ -11,8 +11,7 @@ import string
 import time
 
 import random
-from utils import train, predict_patch, show_image_x_y,\
-                  predictXYandShow, show_y, predictBatchXYandShow
+from utility import train, predictBatchXYandShow
 
 np.random.seed(int((time.time()*1e6)%1e6))
 # TODO CHECKEEERROR IN DATASET!!!
@@ -31,8 +30,8 @@ global IMAGE_INDEX
 
 DATASET_PATH = './CD_Dataset'
 TRAINED_PATH = './trained_models'
-EPOCHS = 50
-N_PATCH_BATCH = 5
+EPOCHS = 20
+N_PATCH_BATCH = 10
 
 ################################################################################
 ############################ MODEL PARAMETERS ##################################
@@ -73,9 +72,9 @@ def main():
     parser.add_argument("-imid","--image_index",
                         help="specify an image for testing", type=int)
     parser.add_argument("-epc","--epochs",
-                        help="number of epochs", type=int, default=10)
+                        help="number of epochs", type=int, default=EPOCHS)
     parser.add_argument("-btc","--n_batch",
-                        help="number of examples per batch", type=int, default=5)
+                        help="number of examples per batch", type=int, default=N_PATCH_BATCH)
     parser.add_argument("-ldmd","--load_model",
                         help="specify model path/name, the script will load the\
                             path/name.h5 and path/name.json files")
@@ -101,7 +100,7 @@ def main():
 
 def run_model():
     # Running the model
-    dataset = CD_Dataset( path=DATASET_PATH, download=True, fit=True )
+    datamanager = CD_Dataset( path=DATASET_PATH, download=True, num_classes=OUTPUT_CHANNELS[0] )
 
     model_input_path = INPUT_PATCH_SIZE + INPUT_CHANNELS
     unet = Unet(model_input_path)
@@ -112,16 +111,18 @@ def run_model():
 
     if MODEL_TRAINING_SESSION:
         print("trainig model")
-        train(unet,dataset, epochs=EPOCHS, n_batch=N_PATCH_BATCH)
+        print
+        train(unet,datamanager, epochs=EPOCHS, n_batch=N_PATCH_BATCH)
         print("saving model " + MODEL_PATH_NAME + " to disk.")
         unet.save_model(MODEL_PATH_NAME)
 
     elif MODEL_TESTING_SESSION:
         print('testing model')
         if IMAGE_INDEX > -1:
-            predictXYandShow(unet, dataset, IMAGE_INDEX)
+            pass
+            #predictXYandShow(unet, datamanager, IMAGE_INDEX)
         else:
-            predictBatchXYandShow(unet, dataset, n_batch=N_PATCH_BATCH)
+            predictBatchXYandShow(unet, datamanager, n_batch=N_PATCH_BATCH)
     else:
         print("no mode selected: add option --help to see mode options.")
 

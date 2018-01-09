@@ -175,6 +175,7 @@ class Data_Sampler():
         patch_ax, patch_ay = sample_patches([X,Y],h,w,offset_h=offset_h,offset_w=offset_w)
         patch_ax, patch_ay = patch_ax/255., patch_ay/255
         patch_ay = to_categorical(patch_ay, num_classes=cy)
+        print(patch_ay.dtype)
         if self.fitted:
             patch_ax = (patch_ax - self.mean_features)/(self.std_features+1e-10)
         return np.expand_dims(patch_ax, axis=0), np.expand_dims(patch_ay, axis=0)
@@ -186,9 +187,9 @@ class Data_Sampler():
         cy = self.num_classes
         h,w = patch_size
         patch_ax, patch_aw, patch_ay = sample_patches([X,W,Y],h,w)
-        patch_ax, patch_ay = patch_ax/255., patch_ay/((256//(cy-1))-1)
+        patch_ax, patch_ay = patch_ax/255., patch_ay/255
         patch_aw = patch_aw/255.
-        patch_ay = to_categorical(patch_ay, num_classes=cy).reshape(h,w,cy)
+        patch_ay = to_categorical(patch_ay, num_classes=cy)
         patch_ayw = np.array(patch_ay,copy=True)
         for c in range(cy):
             patch_ayw[:,:,c] += patch_aw
