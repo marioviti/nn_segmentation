@@ -1,6 +1,6 @@
 import argparse
 
-from datasets import CD_Dataset, DataManager
+from datasets import CD_Dataset
 from models import Unet
 
 import matplotlib.pyplot as plt
@@ -100,8 +100,7 @@ def main():
 
 def run_model():
     # Running the model
-    #datamanager = CD_Dataset( path=DATASET_PATH, download=True, num_classes=OUTPUT_CHANNELS[0] )
-    datamanager = DataManager( path=DATASET_PATH, download=True, num_classes=OUTPUT_CHANNELS[0] )
+    datamanager = CD_Dataset( path=DATASET_PATH, download=True, num_classes=OUTPUT_CHANNELS[0] )
 
     model_input_path = INPUT_PATCH_SIZE + INPUT_CHANNELS
     unet = Unet(model_input_path)

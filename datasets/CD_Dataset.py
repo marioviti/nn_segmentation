@@ -234,7 +234,7 @@ class Data_Sampler():
 
 class CD_Dataset():
     def __init__( self, path="../CD_Dataset",
-                  download=False, fit=True, num_classes=2 ):
+                  download=False, fit=False, num_classes=2 ):
         """
           Args:
               - path : to dataset main folder
