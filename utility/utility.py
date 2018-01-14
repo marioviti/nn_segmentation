@@ -1,3 +1,4 @@
+from matplotlib import pyplot as plt
 import numpy as np
 
 # Expand small prediction to a whole image.
@@ -40,3 +41,30 @@ def predict_full_image(model,x):
             j+=step_w
         i+=step_h
     return y
+
+def to_image(x):
+    mn,mx = np.min(x), np.max(x)
+    return (x - mn)/float(mx-mn)
+
+def from_categorical(batch_patch):
+    return np.argmax(batch_patch,axis=3)
+
+def show_batches(batches, batch_titles=None):
+    fig = plt.figure()
+    fig.set_size_inches(70.5, 70.5, forward=True)
+    n_batches = len(batches)
+    n_patches = batches[0].shape[0]
+    for i in range(n_patches):
+        for j in range(n_batches):
+            a=fig.add_subplot(n_patches,n_batches,i*n_batches+j+1)
+            image_dims = len(batches[j][i].shape)
+            if image_dims==2:
+                # RGB
+                plt.imshow(batches[j][i]*255)
+            else:
+                # Greyscale
+                plt.imshow(batches[j][i])
+            if batch_titles is not None:
+                a.set_title("{}_example_{}".format(batch_titles[j],i))
+    plt.tight_layout()
+    plt.show()

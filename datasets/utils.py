@@ -6,7 +6,7 @@ from keras.preprocessing.image import transform_matrix_offset_center, apply_tran
 np.random.seed(int((time.time()*1e6)%1e6))
 
 def rotation(x, theta, row_axis=0, col_axis=1, channel_axis=2,
-                    fill_mode='nearest', cval=0.):
+                    fill_mode='wrap', cval=0.):
 
     rotation_matrix = np.array([[np.cos(theta), -np.sin(theta), 0],
                                 [np.sin(theta), np.cos(theta), 0],
@@ -17,7 +17,7 @@ def rotation(x, theta, row_axis=0, col_axis=1, channel_axis=2,
     x = apply_transform(x, transform_matrix, channel_axis, fill_mode, cval)
     return x
 
-def images_random_rotate(images, rg=0):
+def images_random_rotate(images, rg=20):
     """
         rg : rotation range in deg
     """
@@ -42,9 +42,9 @@ def integral(x):
         n*=s
     return int_sum/float(n)
 
-def refuse_batch(batch,score_function=integral,threshold=0.2):
+def refuse_batch(batch,score_function=integral,threshold=0.01):
     score = score_function(batch)
-    return score > threshold
+    return score < threshold
 
 # from categorical for a batch patch of size
 # N_batch,H,W,Classes, inverse operation of to_categorical
@@ -105,3 +105,19 @@ def concatenate_batches_patches(batches_patches):
     for i in range(1,N_batches):
         bs_ps_concat = np.concatenate((bs_ps_concat,batches_patches[i]), axis=0)
     return bs_ps_concat
+
+def combine_y_w(ys,ws):
+    """
+        This function weights labes
+        (implicitly moddfying the crossentropy loss)
+    """
+    n_batch = ys.shape[0]
+    c = ys.shape[-1]
+    yw = np.zeros(ys.shape)
+    for i in range(n_batch):
+        for j in range(c):
+            yw[i,:,:,j] = ys[i,:,:,j]+ws[i]
+        #print("before \n: {}".format(yw[i,ws[i]>0]))
+        yw[i] *= ys[i]
+        #print("after \n: {}".format(yw[i,ws[i]>0]))
+    return yw
