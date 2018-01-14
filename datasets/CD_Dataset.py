@@ -1,10 +1,13 @@
 from data_grab import dwuzp
 
+from keras.preprocessing.image import random_rotation ,apply_transform, random_zoom, load_img
+from keras.utils.np_utils import to_categorical
+
 import numpy as np
 import time
 import os
 import PIL
-from utils import sample_patches, to_categorical, images_random_rotate, refuse_batch
+from utils import sample_patches
 
 np.random.seed(int((time.time()*1e6)%1e6))
 
@@ -12,8 +15,8 @@ class Dataset_Loader():
     def __init__(self, path, train_x_path = "train_x",
                              train_w_path = "train_w",
                              train_y_path = "train_y",
-                             eval_x_path = "eval_x",
-                             eval_w_path = "eval_w",
+                             eval_x_path = "eval_x", 
+                             eval_w_path = "eval_w", 
                              eval_y_path = "eval_y" ):
         """
             path/
@@ -66,11 +69,11 @@ class Dataset_Loader():
         return  self.train_x, self.train_w, self.train_y, \
                 self.eval_x, self.eval_w, self.eval_y
 
-from utils import batch_patches
 
 class Data_Sampler():
     def __init__(self, train_x, train_w, train_y,
-                       eval_x=None, eval_w=None, eval_y=None, num_classes=2):
+                       eval_x=None, eval_w=None, eval_y=None, 
+                       num_classes=2):
         """
             Args:
                 - train_x : (PIL.Image pointers list)
@@ -126,6 +129,7 @@ class Data_Sampler():
     def get_curr_index(self,train=True):
         return self.curr_example_id if train else self.eval_curr_example_id
 
+
     def fit(self):
         """
             preprocessing pre-step:
@@ -163,25 +167,31 @@ class Data_Sampler():
         setY = self.train_y if train else self.eval_y
         cy = self.num_classes
         X = np.array(setX[idx])/255.
-        Y = np.array(setY[idx])//(256/(cy-1)-1)
+        #Y = np.array(setY[idx])//((256//(cy-1))-1)
+        Y = np.array(setY[idx])/255
         if self.fitted:
             X = (X - self.mean_features)/(self.std_features+1e-10)
         h,w = Y.shape
         Y = to_categorical(Y, num_classes=cy)
         return X,Y
 
-    # Sample patch main method
-    # First select the correct index according to a combination of parameters
-    # same, shuffle.
-    # X,W,Y are sampled from the database (training or eval)
-    # a patch is sampled and n_batch times and all are stacked in a batch
-    # of size (n_batch,patch_size,feature channels) and
-    #         (n_batch,patch_size,classes)
-    def sample_X_Y_patch_batch(self, patch_size, n_batch=10,
+    def sample_X_Y_W_patches(self,patch_size,X,Y,W,fit=True,offsets=[None,None]):
+        """
+            get same random patch and apply mean std featurewise normalization.
+        """
+        cy = self.num_classes
+        h,w = patch_size
+        offset_h,offset_w = offsets
+        patch_ax, patch_ay, patch_aw = sample_patches([X,Y,W],h,w,offset_h=offset_h,offset_w=offset_w)
+        patch_ax, patch_ay, patch_aw = patch_ax/255., patch_ay/255, patch_aw/255.
+        patch_ay = to_categorical(patch_ay, num_classes=cy)
+        if self.fitted and fit:
+            patch_ax = (patch_ax - self.mean_features)/(self.std_features+1e-10)
+        return np.expand_dims(patch_ax, axis=0), np.expand_dims(patch_ay, axis=0), np.expand_dims(patch_aw, axis=0)
+
+    def sample_X_Y_W_patch_batch(self, patch_size, n_batch=10,
                                      offsets = [None,None],
-                                     W=False, train=True,
-                                     acceptance_threshold = 0.01,
-                                     fit=True, rotation=True,
+                                     train=True, fit=True,
                                      shuffle=True, same=False):
         """
             args:
@@ -190,32 +200,23 @@ class Data_Sampler():
         assert(n_batch>0)
         idx = self.get_curr_index(train=train) if same else (self.get_random_index(train=train) \
                                         if shuffle else self.get_next_index(train=train))
+        
+        datax = np.array(self.train_x[idx] if train else self.eval_x[idx] )
+        datay = np.array(self.train_y[idx] if train else self.eval_y[idx] )
+        dataw = np.array(self.train_w[idx] if train else self.eval_w[idx] )
 
-        datax = np.array(self.train_x[idx] if train else self.eval_x[idx])
-        datay = np.array(self.train_y[idx] if train else self.eval_y[idx])
-        dataw = np.array(self.train_w[idx] if train else self.eval_w[idx])
-
-        if rotation:
-            datax,datay,dataw = images_random_rotate([datax,datay,dataw])
-
-        cy = self.num_classes
-        h,w = patch_size
-        refused = True
-        it,maxit = 0, 4
-        while(refused and it<maxit):
-            batch_x,batch_y,batch_w = batch_patches([datax, datay, dataw],n_batch,h,w)
-            refused = refuse_batch(batch_y/(256/(cy-1)-1),threshold=acceptance_threshold)
-            it += 1
-        batch_x = batch_x/255.
-        batch_y = batch_y/(256/(cy-1)-1)
-        batch_y = to_categorical(batch_y, num_classes=cy)
-        batch_w = batch_w/255.
-        return batch_x,batch_y,batch_w
+        batch_x, batch_y, batch_w  = self.sample_X_Y_W_patches(patch_size,datax,datay,dataw,fit=fit,offsets=offsets)
+        for i in range(1,n_batch):
+            patch_x, patch_y, patch_w = self.sample_X_Y_W_patches(patch_size,datax,datay,dataw,fit=fit,offsets=offsets)
+            batch_x = np.concatenate( (batch_x,patch_x), axis=0 )
+            batch_w = np.concatenate( (batch_w,patch_w), axis=0 )
+            batch_y = np.concatenate( (batch_y,patch_y), axis=0 )
+        return batch_x, batch_y, batch_w
 
 
 class CD_Dataset():
     def __init__( self, path="../CD_Dataset",
-                  download=False, fit=True, num_classes=2 ):
+                  download=False, fit=False, num_classes=2 ):
         """
           Args:
               - path : to dataset main folder
@@ -227,16 +228,14 @@ class CD_Dataset():
             print( 'Downloading CD_Dataset' )
             dwuzp()
         self.loader = Dataset_Loader(path)
-        x_train, w_trian, y_train, x_eval, w_eval, y_eval = self.loader.get_data_all()
-
-        self.sampler = Data_Sampler( x_train, w_trian, y_train,
-                                     eval_x=x_eval, eval_w=w_eval, eval_y=y_eval,
-                                     num_classes=num_classes )
+        train_x, train_w, train_y, eval_x, eval_w, eval_y = self.loader.get_data_all()
+        self.sampler = Data_Sampler( train_x, train_w, train_y,
+                                     eval_x=eval_x, eval_w=eval_w, eval_y=eval_y, num_classes=num_classes )
         if fit:
             self.sampler.fit()
 
-    def sample_X_Y_patch_batch( self, patch_size, **kwargs ):
-        return self.sampler.sample_X_Y_patch_batch( patch_size, **kwargs )
+    def sample_X_Y_W_patch_batch( self, patch_size, **kwargs ):
+        return self.sampler.sample_X_Y_W_patch_batch( patch_size, **kwargs )
 
     def get_X_Y(self,*args,**kwargs):
         return self.sampler.get_X_Y(*args,**kwargs)
