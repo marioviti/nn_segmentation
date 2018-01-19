@@ -3,6 +3,7 @@ import argparse
 from datasets import CD_Dataset
 from models import Unet
 
+import keras
 import matplotlib.pyplot as plt
 import numpy as np
 import os
@@ -13,8 +14,9 @@ import time
 import random
 from utility import train, train_and_save, predictBatchXYandShow
 
-np.random.seed(int((time.time()*1e6)%1e6))
-# TODO CHECKEEERROR IN DATASET!!!
+seed = int((time.time()*1e6)%1e6)
+np.random.seed(seed)
+keras.initializers.RandomNormal(mean=0.0, stddev=0.05, seed=seed)
 
 ################################################################################
 ########################## SESSION ARGUMENTS ###################################

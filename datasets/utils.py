@@ -42,7 +42,7 @@ def integral(x):
         n*=s
     return int_sum/float(n)
 
-def refuse_batch(batch,score_function=integral,threshold=0.01):
+def refuse_batch(batch,score_function=integral,threshold=0.025):
     score = score_function(batch)
     return score < threshold
 

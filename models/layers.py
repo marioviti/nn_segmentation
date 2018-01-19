@@ -1,5 +1,6 @@
 from keras import backend as K
 from keras.layers import Input, Conv2D, MaxPool2D, Dropout, Conv2DTranspose, concatenate, Cropping2D, BatchNormalization
+from keras import regularizers
 
 K.set_image_data_format('channels_last')
 

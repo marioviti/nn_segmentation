@@ -107,7 +107,7 @@ def _to_tensor(x, dtype):
         x = tf.cast(x, dtype)
     return x
 
-def categorical_crossentropy2(target, output, from_logits=False):
+def weighted_categorical_crossentropy(target, output):
     """Categorical crossentropy between an output tensor and a target tensor.
     # Arguments
         target: A tensor of the same shape as `output`.
@@ -119,27 +119,21 @@ def categorical_crossentropy2(target, output, from_logits=False):
     # Returns
         Output tensor.
     """
-    # Note: tf.nn.softmax_cross_entropy_with_logits
-    # expects logits, Keras expects probabilities.
-    if not from_logits:
-        # scale preds so that the class probas of each sample sum to 1
-        output /= tf.reduce_sum(output,
-                                len(output.get_shape()) - 1,
-                                True)
-        # manual computation of crossentropy
-        #_epsilon = _to_tensor(epsilon(), output.dtype.base_dtype)
-        #output = tf.clip_by_value(output, _epsilon, 1. - _epsilon)
-        print(np.max(output))
-        print(np.min(output))
-        return - tf.reduce_sum(target * tf.log(output),
-                               len(output.get_shape()) - 1)
-    else:
-        return tf.nn.softmax_cross_entropy_with_logits(labels=target,logits=output)
+    # scale preds so that the class probas of each sample sum to 1
+    output /= tf.reduce_sum(output,
+                            len(output.get_shape()) - 1,
+                            True)
+    # manual computation of crossentropy
+    #_epsilon = _to_tensor(epsilon(), output.dtype.base_dtype)
+    #output = tf.clip_by_value(output, _epsilon, 1. - _epsilon)
+    return - tf.reduce_sum(target * tf.log(output),
+                           len(output.get_shape()) - 1)
+
 
 class Unet():
     def __init__( self, input_shape, classes=2,
                   regularized = False,
-                  loss=categorical_crossentropy2,
+                  loss=weighted_categorical_crossentropy,
                   metrics=[dice_coef], optimizer=Adam(lr=1e-5) ):
         """
         params:
