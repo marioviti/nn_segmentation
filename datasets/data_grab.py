@@ -2,9 +2,10 @@ import wget
 import zipfile
 import os.path as pth
 
-data_url = 'https://www.dropbox.com/s/57czuiz90a1bk9f/CD_Dataset.zip?dl=1'
-data_name = 'CD_Dataset.zip'
-downloaded_data_path = 'CD_Dataset.zip'
+data_url = data_url = 'https://www.dropbox.com/s/pxz42kgrt7oltix/CD_Dataset_01.zip?dl=1'
+
+data_name = 'CD_Dataset_01.zip'
+downloaded_data_path = 'CD_Dataset_01.zip'
 
 def download(output='./'):
     downloaded_data_path = data_name

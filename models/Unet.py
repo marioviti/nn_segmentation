@@ -94,10 +94,52 @@ def get_unet_model(input_size,classes,regularized=False):
     model = Model(inputs=[layers['inputs']], outputs=[layers['outputs']])
     return model, layers
 
+def _to_tensor(x, dtype):
+    """Convert the input `x` to a tensor of type `dtype`.
+    # Arguments
+        x: An object to be converted (numpy array, list, tensors).
+        dtype: The destination type.
+    # Returns
+        A tensor.
+    """
+    x = tf.convert_to_tensor(x)
+    if x.dtype != dtype:
+        x = tf.cast(x, dtype)
+    return x
+
+def categorical_crossentropy2(target, output, from_logits=False):
+    """Categorical crossentropy between an output tensor and a target tensor.
+    # Arguments
+        target: A tensor of the same shape as `output`.
+        output: A tensor resulting from a softmax
+            (unless `from_logits` is True, in which
+            case `output` is expected to be the logits).
+        from_logits: Boolean, whether `output` is the
+            result of a softmax, or is a tensor of logits.
+    # Returns
+        Output tensor.
+    """
+    # Note: tf.nn.softmax_cross_entropy_with_logits
+    # expects logits, Keras expects probabilities.
+    if not from_logits:
+        # scale preds so that the class probas of each sample sum to 1
+        output /= tf.reduce_sum(output,
+                                len(output.get_shape()) - 1,
+                                True)
+        # manual computation of crossentropy
+        #_epsilon = _to_tensor(epsilon(), output.dtype.base_dtype)
+        #output = tf.clip_by_value(output, _epsilon, 1. - _epsilon)
+        print(np.max(output))
+        print(np.min(output))
+        return - tf.reduce_sum(target * tf.log(output),
+                               len(output.get_shape()) - 1)
+    else:
+        return tf.nn.softmax_cross_entropy_with_logits(labels=target,logits=output)
+
 class Unet():
     def __init__( self, input_shape, classes=2,
                   regularized = False,
-                  loss=categorical_crossentropy,
+                  loss=categorical_crossentropy2,
                   metrics=[dice_coef], optimizer=Adam(lr=1e-5) ):
         """
         params:
@@ -159,36 +201,17 @@ class Unet():
     def fit( self, x_train, y_train, batch_size=1, epochs=1, cropped=False ):
         out_shape = self.output_shape
         y_train = y_train if cropped else crop_receptive(y_train, out_shape)
-        print (out_shape)
-        print (y_train.shape)
-        self.model.fit( x_train, y_train, \
+        return self.model.fit( x_train, y_train, \
                         epochs=epochs, batch_size=batch_size )
 
     def evaulate( self, x_test,  y_test,  batch_size=1, cropped=False ):
         out_shape = self.output_shape
         y_test = y_test if cropped else crop_receptive(y_test, out_shape)
-        self.score = self.model.evaluate(x_test, y_test, batch_size=batch_size )
-        return self.score
+        return self.model.evaluate(x_test, y_test, batch_size=batch_size )
 
     def predict( self, x, batch_size=1, verbose=0 ):
         return self.model.predict( x, batch_size=batch_size, verbose=verbose )
 
-    def predict_mask( self, x, verbose=0 ):
-        hx,wx,cx = self.input_shape
-        hy,wy,cy = self.output_shape
-        patch = self.predict(x.reshape([1,hx,wx,cx]), verbose=verbose)
-        return expand_receptive(patch,[hx,wx,cy])
-
-    def predict_and_stich( self, X, stride=1 ):
-        hX,wX,cX = X.shape
-        hx,wx,cx = self.input_shape
-        hy,wy,cy = self.output_shape
-        Y = np.zeros((hX,wX,cy))
-        for i in range(hX-hx,stride):
-            for j in range(wX-wx,stride):
-                patch_x = X[ i:i+hx, j:j+wx ]
-                Y[ i:i+hx, j:j+wx ] += predict_mask(patch_x)
-        return Y
 
 #def main():
 #    # Generate dummy data

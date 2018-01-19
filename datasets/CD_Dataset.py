@@ -7,7 +7,7 @@ import numpy as np
 import time
 import os
 import PIL
-from utils import sample_patches
+from utils import sample_patches, refuse_batch
 
 np.random.seed(int((time.time()*1e6)%1e6))
 
@@ -159,21 +159,21 @@ class Data_Sampler():
         print("std_features: ",self.std_features)
         self.fitted = True
 
-    def get_X_Y(self, index=None, shuffle=True, train=True):
+    def get_X_Y_W(self, index=None, shuffle=True, train=True, rotated=True):
         idx = self.get_curr_index()
         idx = self.get_random_index(train=train) if shuffle else idx
         idx = index if index is not None else idx
-        setX = self.train_x if train else self.eval_x
-        setY = self.train_y if train else self.eval_y
-        cy = self.num_classes
-        X = np.array(setX[idx])/255.
-        #Y = np.array(setY[idx])//((256//(cy-1))-1)
-        Y = np.array(setY[idx])/255
+        X = self.train_x[idx] if train else self.eval_x[idx]
+        Y = self.train_y[idx] if train else self.eval_y[idx]
+        W = self.train_w[idx] if train else self.eval_w[idx]
+        X = np.array(X)/255.
+        W = np.array(W)/255.
+        Y = np.array(Y)/255            
         if self.fitted:
             X = (X - self.mean_features)/(self.std_features+1e-10)
-        h,w = Y.shape
+        cy = self.num_classes
         Y = to_categorical(Y, num_classes=cy)
-        return X,Y
+        return X,Y,W
 
     def sample_X_Y_W_patches(self,patch_size,X,Y,W,fit=True,offsets=[None,None]):
         """
@@ -182,9 +182,17 @@ class Data_Sampler():
         cy = self.num_classes
         h,w = patch_size
         offset_h,offset_w = offsets
-        patch_ax, patch_ay, patch_aw = sample_patches([X,Y,W],h,w,offset_h=offset_h,offset_w=offset_w)
-        patch_ax, patch_ay, patch_aw = patch_ax/255., patch_ay/255, patch_aw/255.
+        
+        refused = True
+        i = 0
+        while(refused and i<10):
+            patch_ax, patch_ay, patch_aw = sample_patches([X,Y,W],h,w,offset_h=offset_h,offset_w=offset_w)
+            patch_ax, patch_ay, patch_aw = patch_ax/255., patch_ay/255, patch_aw/255.
+            refused = refuse_batch(patch_ay)
+            i += 1
+  
         patch_ay = to_categorical(patch_ay, num_classes=cy)
+            
         if self.fitted and fit:
             patch_ax = (patch_ax - self.mean_features)/(self.std_features+1e-10)
         return np.expand_dims(patch_ax, axis=0), np.expand_dims(patch_ay, axis=0), np.expand_dims(patch_aw, axis=0)
@@ -233,12 +241,18 @@ class CD_Dataset():
                                      eval_x=eval_x, eval_w=eval_w, eval_y=eval_y, num_classes=num_classes )
         if fit:
             self.sampler.fit()
+    
+    def mean_features(self):
+        return self.sampler.mean_features if self.sampler.fit else None
 
+    def std_features(self):
+        return self.sampler.std_features if self.sampler.fit else None
+    
     def sample_X_Y_W_patch_batch( self, patch_size, **kwargs ):
         return self.sampler.sample_X_Y_W_patch_batch( patch_size, **kwargs )
 
-    def get_X_Y(self,*args,**kwargs):
-        return self.sampler.get_X_Y(*args,**kwargs)
+    def get_X_Y_W(self,*args,**kwargs):
+        return self.sampler.get_X_Y_W(*args,**kwargs)
 
     def sample_XY_patch_at(self,patch_size,offsets,train=True,same=False):
         return self.sampler.sample_X_Y_patch_batch( patch_size, n_batch=1,
