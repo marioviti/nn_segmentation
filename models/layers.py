@@ -16,7 +16,8 @@ def crop_to(bigger_input_size,smaller_input_size):
     _,sh,sw,_ = smaller_input_size
     dh,dw = bh-sh, bw-sw
     q2dw,r2dw,q2dh,r2dh = dw//2 , dw%2, dh//2 , dh%2
-    return Cropping2D(cropping=((q2dh,q2dh+r2dh), (q2dw, q2dw+r2dw)), data_format='channels_last')
+    return Cropping2D( cropping=((q2dh,q2dh+r2dh), (q2dw, q2dw+r2dw)),
+                       data_format='channels_last')
 
 def crop_concatenate(bigger_input, smaller_input):
     """
@@ -27,37 +28,69 @@ def crop_concatenate(bigger_input, smaller_input):
     cropped_input = crop_to(bigger_input_size,smaller_input_size)(bigger_input)
     return concatenate([cropped_input,smaller_input],axis=3)
 
-def cnv3x3Relu(filters, regularized=False):
+def cnv3x3Relu(filters, regularized=False, padding='valid'):
     layer = Conv2D( filters, (3,3),
                     kernel_regularizer=regularizers.l2(0.01),
                     activation='relu',
-                    padding='valid') \
+                    padding=padding) \
             if regularized else \
-            Conv2D(filters, (3, 3), activation='relu', padding='valid')
+            Conv2D( filters, (3, 3),
+                    activation='relu',
+                    padding=padding)
     return layer
 
 def downsample(pool_size=(2, 2)):
     return MaxPool2D(pool_size=pool_size)
 
-def upsample(filters):
-    return Conv2DTranspose(filters, (2, 2), strides=(2,2), padding='valid',
-                            activation='relu')
+def upsample(filters, padding='valid', kernel=(2,2), strides=(2,2)):
+    return Conv2DTranspose(filters, kernel,
+                           strides=strides,
+                           padding=padding,
+                           activation='relu')
 
-def new_down_level(filters, inputs, regularized=False):
+def feature_mask(up_factor, up_filters, filters, ouptut_classes, inputs, name,
+                 regularized=False, padding='valid'):
+    """
+        Feature mask layer block
+    """
+    outputs = upsample( up_filters,
+                        kernel = (up_factor,up_factor),
+                        strides = (up_factor,up_factor),
+                        padding = padding)(inputs)
+    outputs = cnv3x3Relu(filters,
+                         padding=padding,
+                         regularized=regularized)(outputs)
+    outputs = cnv3x3Relu(filters,
+                         padding=padding,
+                         regularized=regularized)(outputs)
+    outputs = Conv2D(ouptut_classes, (1, 1), activation='softmax', name=name)(outputs)
+    return outputs
+
+def new_down_level(filters, inputs, regularized=False, padding='valid'):
     """
         Contracting layer block
     """
     outputs= downsample()(inputs)
-    outputs = cnv3x3Relu(filters,regularized=regularized)(outputs)
-    outputs = cnv3x3Relu(filters,regularized=regularized)(outputs)
+    outputs = cnv3x3Relu(filters,
+                         padding=padding,
+                         regularized=regularized)(outputs)
+    outputs = cnv3x3Relu(filters,
+                         padding=padding,
+                         regularized=regularized)(outputs)
     return outputs
 
-def new_up_level(filters, up_input, right_input):
+def new_up_level(filters, up_input, right_input,
+                 regularized=False, padding='valid'):
     """
         Decontracting layer block
     """
-    outputs = upsample(filters)(up_input)
+    outputs = upsample(filters,
+                       padding=padding)(up_input)
     outputs = crop_concatenate(right_input,outputs)
-    outputs = cnv3x3Relu(filters)(outputs)
-    outputs = cnv3x3Relu(filters)(outputs)
+    outputs = cnv3x3Relu(filters,
+                         padding=padding,
+                         regularized=regularized)(outputs)
+    outputs = cnv3x3Relu(filters,
+                         padding=padding,
+                         regularized=regularized)(outputs)
     return outputs

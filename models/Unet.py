@@ -1,12 +1,12 @@
 from layers import *
 from serialize import *
+from GenericModel import GenericModel
 
 import numpy as np
 
 from keras import backend as K
 from keras.losses import binary_crossentropy, categorical_crossentropy
 from keras.utils import to_categorical
-from keras.models import Model
 from keras.optimizers import SGD,Adam
 from keras.layers import ZeroPadding2D
 
@@ -81,10 +81,10 @@ def define_unet_layers(input_shape, classes, regularized=False):
 
     layers['bottle_neck'] = new_down_level(1024,layers['down_path'][1],regularized=regularized)
 
-    layers['up_path'][1] = new_up_level(512,layers['bottle_neck'],layers['down_path'][1])
-    layers['up_path'][2] = new_up_level(256,layers['up_path'][1],layers['down_path'][2])
-    layers['up_path'][3] = new_up_level(128,layers['up_path'][2],layers['down_path'][3])
-    layers['up_path'][4] = new_up_level(64,layers['up_path'][3],layers['down_path'][4])
+    layers['up_path'][1] = new_up_level(512,layers['bottle_neck'],layers['down_path'][1],regularized=regularized)
+    layers['up_path'][2] = new_up_level(256,layers['up_path'][1],layers['down_path'][2],regularized=regularized)
+    layers['up_path'][3] = new_up_level(128,layers['up_path'][2],layers['down_path'][3],regularized=regularized)
+    layers['up_path'][4] = new_up_level(64,layers['up_path'][3],layers['down_path'][4],regularized=regularized)
 
     layers['outputs'] = Conv2D(classes, (1, 1), activation='softmax')(layers['up_path'][4])
     return layers
@@ -130,7 +130,7 @@ def weighted_categorical_crossentropy(target, output):
                            len(output.get_shape()) - 1)
 
 
-class Unet():
+class Unet(GenericModel):
     def __init__( self, input_shape, classes=2,
                   regularized = False,
                   loss=weighted_categorical_crossentropy,
@@ -141,91 +141,20 @@ class Unet():
             metrics:    (tuple) metrics function for evaluation.
             optimizer:  (function) Optimization strategy.
         """
-        self.classes = classes
-        model, layers = get_unet_model(input_shape, classes, regularized=regularized)
-        self.model = model
+        layers = define_unet_layers(input_shape, classes, regularized=regularized)
         self.layers = layers
-
-        self.inputs_shape = layers['inputs']._keras_shape
-        self.outputs_shape = layers['outputs']._keras_shape
-
-        self.loss= loss
-        self.metrics = metrics
-        self.optimizer = optimizer
-
-        self.compile_model()
-
-    @property
-    def optimizer(self):
-        return self.optimizer
-
-    @optimizer.setter
-    def optimizer(self, v):
-        self.optimizer = v
-
-    @property
-    def metrics(self):
-        return self.metrics
-
-    @metrics.setter
-    def metrics(self, v):
-        self.metrics = v
-
-    @property
-    def input_shape(self):
-        return self.inputs_shape[1:]
-
-    @property
-    def output_shape(self):
-        return self.outputs_shape[1:]
-
-    def save_model(self, name=None):
-        self.name = self.name if name is None else name
-        save_to( self.model,self.name )
-
-    def load_model(self, name=None):
-        self.name = self.name if name is None else name
-        self.model = load_from( self.name )
-        self.compile_model()
-
-    def compile_model(self):
-        self.model.compile( optimizer=self.optimizer, \
-                            loss=self.loss, metrics=self.metrics )
+        self.classes = classes
+        inputs, outputs = [layers['inputs']],[layers['outputs']]
+        GenericModel.__init__(self, inputs, outputs, loss, metrics, optimizer)
 
     def fit( self, x_train, y_train, batch_size=1, epochs=1, cropped=False ):
-        out_shape = self.output_shape
+        out_shape = self.outputs_shape[0]
         y_train = y_train if cropped else crop_receptive(y_train, out_shape)
-        return self.model.fit( x_train, y_train, \
-                        epochs=epochs, batch_size=batch_size )
+        return GenericModel.fit( self, x_train, y_train,
+                                 epochs=epochs,
+                                 batch_size=batch_size )
 
-    def evaulate( self, x_test,  y_test,  batch_size=1, cropped=False ):
-        out_shape = self.output_shape
+    def evaluate( self, x_test,  y_test,  batch_size=1, cropped=False ):
+        out_shape = self.outputs_shape[0]
         y_test = y_test if cropped else crop_receptive(y_test, out_shape)
-        return self.model.evaluate(x_test, y_test, batch_size=batch_size )
-
-    def predict( self, x, batch_size=1, verbose=0 ):
-        return self.model.predict( x, batch_size=batch_size, verbose=verbose )
-
-
-#def main():
-#    # Generate dummy data
-#    input_size = [350,350,3]
-#    unet = Unet(input_size)
-#    _,h,w,c = unet.outputs_shape
-#    x_train = np.random.random([5,350,350,3])
-#    y_train = np.random.randint(2, size=([5,350,350,2]))
-#
-#    unet.fit(x_train,y_train)
-#    unet.evaulate(x_train,y_train)
-#    y_hat = unet.predict(x_train[0])
-#    print(y_hat.shape)
-#    print(unet.get_model_output_shape())
-#    print(unet.score)
-#
-#if __name__ == '__main__':
-#    main()
-
-#binary_crossentropy
-#sgd = SGD(lr=0.01, decay=1e-6, momentum=0.9, nesterov=True)
-#self.model.compile(loss=weighted_cross_entropy(1), optimizer=sgd, metrics=['accuracy'])
-#self.model.compile(optimizer=Adam(lr=1e-5), loss=binary_crossentropy, metrics=['accuracy'])
+        return GenericModel.evaluate(self,x_test, y_test, batch_size=batch_size )
