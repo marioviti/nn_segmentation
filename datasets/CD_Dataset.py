@@ -7,7 +7,7 @@ import numpy as np
 import time
 import os
 import PIL
-from utils import sample_patches, refuse_batch
+from utils import sample_patches, refuse_batch, images_random_rotate
 
 np.random.seed(int((time.time()*1e6)%1e6))
 
@@ -160,6 +160,7 @@ class Data_Sampler():
         self.fitted = True
 
     def get_X_Y_W(self, index=None, shuffle=True, train=True, rotated=True):
+        cy = cy = self.num_classes
         idx = self.get_curr_index()
         idx = self.get_random_index(train=train) if shuffle else idx
         idx = index if index is not None else idx
@@ -199,6 +200,7 @@ class Data_Sampler():
 
     def sample_X_Y_W_patch_batch(self, patch_size, n_batch=10,
                                      offsets = [None,None],
+                                     rotate=True,
                                      train=True, fit=True,
                                      shuffle=True, same=False):
         """
@@ -212,6 +214,9 @@ class Data_Sampler():
         datax = np.array(self.train_x[idx] if train else self.eval_x[idx] )
         datay = np.array(self.train_y[idx] if train else self.eval_y[idx] )
         dataw = np.array(self.train_w[idx] if train else self.eval_w[idx] )
+        
+        if rotate:
+            datax,datay,dataw = images_random_rotate([datax,datay,dataw])
 
         batch_x, batch_y, batch_w  = self.sample_X_Y_W_patches(patch_size,datax,datay,dataw,fit=fit,offsets=offsets)
         for i in range(1,n_batch):

@@ -14,20 +14,20 @@ import tensorflow as tf
 
 K.set_image_data_format('channels_last')
 
-def crop_receptive(batch_y, model_output_size):
+def crop_receptive(batch, model_output_size):
     """
         Get a cropped batch to fit the perceptive field,
-        the resulting output shape is n,hy,wy,cy.
+        the resulting output shape is n,hy,wy.
 
         args:
-            - batch_y (numpy array) y.shape : n,hx,wx,cy
+            - batch (numpy array) batch.shape[0:3] : n,hx,wx
             - model_output_size (list) : hy,wy,cy
     """
-    n,hx,wx,cy = batch_y.shape
+    n,hx,wx = batch.shape[0:3]
     hy,wy,cy = model_output_size
     dhq, dhr = (hx-hy)//2, (hx-hy)%2
     dwq, dwr = (wx-wy)//2, (wx-wy)%2
-    return batch_y[:, dhq: hx - (dhq + dhr), dwq: wx - (dwq + dwr) ]
+    return batch[:, dhq: hx - (dhq + dhr), dwq: wx - (dwq + dwr) ]
 
 def expand_receptive(batch_y, model_input_shape):
     """
@@ -57,7 +57,7 @@ def dice_coef(y_true, y_pred):
 def dice_coef_loss(y_true, y_pred):
     return -dice_coef(y_true, y_pred)
 
-def define_unet_layers(input_shape, classes, regularized=False):
+def define_unet_layers(input_shape, classes, regularized=False, output_activation='softmax'):
     """
     Use the functional API to define the model
     https://keras.io/getting-started/functional-api-guide/
@@ -86,7 +86,7 @@ def define_unet_layers(input_shape, classes, regularized=False):
     layers['up_path'][3] = new_up_level(128,layers['up_path'][2],layers['down_path'][3],regularized=regularized)
     layers['up_path'][4] = new_up_level(64,layers['up_path'][3],layers['down_path'][4],regularized=regularized)
 
-    layers['outputs'] = Conv2D(classes, (1, 1), activation='softmax')(layers['up_path'][4])
+    layers['outputs'] = Conv2D(classes, (1, 1), activation=output_activation)(layers['up_path'][4])
     return layers
 
 def get_unet_model(input_size,classes,regularized=False):
@@ -107,54 +107,57 @@ def _to_tensor(x, dtype):
         x = tf.cast(x, dtype)
     return x
 
-def weighted_categorical_crossentropy(target, output):
+def softmax_categorical_crossentropy(target, output):
     """Categorical crossentropy between an output tensor and a target tensor.
     # Arguments
         target: A tensor of the same shape as `output`.
-        output: A tensor resulting from a softmax
-            (unless `from_logits` is True, in which
-            case `output` is expected to be the logits).
-        from_logits: Boolean, whether `output` is the
-            result of a softmax, or is a tensor of logits.
+        output: result of a softmax, or is a tensor of logits.
     # Returns
         Output tensor.
     """
-    # scale preds so that the class probas of each sample sum to 1
-    output /= tf.reduce_sum(output,
-                            len(output.get_shape()) - 1,
-                            True)
     # manual computation of crossentropy
-    #_epsilon = _to_tensor(epsilon(), output.dtype.base_dtype)
-    #output = tf.clip_by_value(output, _epsilon, 1. - _epsilon)
     return - tf.reduce_sum(target * tf.log(output),
                            len(output.get_shape()) - 1)
+
+def categorical_cross_entorpy_with_logits(target, output):
+    """
+        this function expects unscaled outputs to apply crossentropy (optimized gradient).
+    """
+    return tf.nn.softmax_cross_entropy_with_logits(logits=output,labels=target)
 
 
 class Unet(GenericModel):
     def __init__( self, input_shape, classes=2,
                   regularized = False,
-                  loss=weighted_categorical_crossentropy,
-                  metrics=[dice_coef], optimizer=Adam(lr=1e-5) ):
+                  loss=softmax_categorical_crossentropy,
+                  metrics=[softmax_categorical_crossentropy,dice_coef], 
+                  optimizer=Adam(lr=1e-5),
+                  output_activation='softmax'):
         """
         params:
             inputs_shape: (tuple) channels_last (h,w,c) of input image.
             metrics:    (tuple) metrics function for evaluation.
             optimizer:  (function) Optimization strategy.
         """
-        layers = define_unet_layers(input_shape, classes, regularized=regularized)
+        layers = define_unet_layers(input_shape, classes, regularized=regularized, output_activation=output_activation)
         self.layers = layers
         self.classes = classes
         inputs, outputs = [layers['inputs']],[layers['outputs']]
         GenericModel.__init__(self, inputs, outputs, loss, metrics, optimizer)
 
-    def fit( self, x_train, y_train, batch_size=1, epochs=1, cropped=False ):
+    def fit( self, x_train, y_train, batch_size=1, epochs=1, cropped=False, sample_weight=None ,**kwargs ):
         out_shape = self.outputs_shape[0]
         y_train = y_train if cropped else crop_receptive(y_train, out_shape)
         return GenericModel.fit( self, x_train, y_train,
                                  epochs=epochs,
-                                 batch_size=batch_size )
+                                 batch_size=batch_size,
+                                 sample_weight=sample_weight,
+                                 **kwargs)
 
-    def evaluate( self, x_test,  y_test,  batch_size=1, cropped=False ):
+    def evaluate( self, x_test, y_test, batch_size=1, cropped=False ):
         out_shape = self.outputs_shape[0]
         y_test = y_test if cropped else crop_receptive(y_test, out_shape)
         return GenericModel.evaluate(self,x_test, y_test, batch_size=batch_size )
+
+if __name__=='__main__':
+    mimo = Unet([750,750,3])

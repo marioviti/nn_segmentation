@@ -10,6 +10,7 @@ from keras.utils import to_categorical
 from keras.optimizers import SGD,Adam
 from keras.layers import ZeroPadding2D
 
+from skimage.transform import resize
 import tensorflow as tf
 
 K.set_image_data_format('channels_last')
@@ -68,11 +69,16 @@ def define_mimonet_layers(input_shape, classes, regularized=False):
                 'up_path' : {},
                 'outputs' : None }
 
-    layers['inputs'] = [Input(input_shape)]
+    layers['inputs'] = [Input(input_shape[0],name='in1'),Input(input_shape[1],name='in2'),Input(input_shape[2],name='in3')]
     layers['down_path'][4] = cnv3x3Relu(64,regularized=regularized)(layers['inputs'][0])
     layers['down_path'][4] = cnv3x3Relu(64,regularized=regularized)(layers['down_path'][4])
-    layers['down_path'][3] = new_down_level(128,layers['down_path'][4],regularized=regularized)
-    layers['down_path'][2] = new_down_level(256,layers['down_path'][3],regularized=regularized)
+    
+    layers['down_path'][3] = crop_concatenate(layers['inputs'][1], 
+                                              new_down_level(128,layers['down_path'][4],regularized=regularized))
+    
+    layers['down_path'][2] =  crop_concatenate(layers['inputs'][2],
+                                               new_down_level(256,layers['down_path'][3],regularized=regularized))
+    
     layers['down_path'][1] = new_down_level(512,layers['down_path'][2],regularized=regularized)
 
     layers['bottle_neck'] = new_down_level(1024,layers['down_path'][1],regularized=regularized)
@@ -123,6 +129,14 @@ def la2_categorical_crossentropy(target,output):
     la2_counter += 1.0
     return weighted_categorical_crossentropy(target,output)/la2_counter
 
+def define_mimonet_inputs_shapes(input_shape):
+    h,w,c = input_shape
+    return [ input_shape, [h//2,w//2,c], [h//4,w//4,c] ]
+
+def compute_mimonet_inputs(x,shapes):
+    x1 = resize(x,shapes[1], anti_aliasing=True)
+    x2 = resize(x,shapes[2], anti_aliasing=True)
+    return x,x1,x2
 
 class MimoNet(GenericModel):
     def __init__( self, input_shape, classes=2,
@@ -139,7 +153,8 @@ class MimoNet(GenericModel):
             metrics:    (tuple) metrics function for evaluation.
             optimizer:  (function) Optimization strategy.
         """
-        layers = define_mimonet_layers(input_shape, classes, regularized=regularized)
+        input_shapes = define_mimonet_inputs_shapes(input_shape)
+        layers = define_mimonet_layers(input_shapes, classes, regularized=regularized)
         self.layers = layers
         self.classes = classes
         inputs, outputs = layers['inputs'],layers['outputs']
@@ -149,21 +164,36 @@ class MimoNet(GenericModel):
         print('outputs_shape', self.outputs_shape)
 
     def fit( self, x_train, y_train, batch_size=1, epochs=1, cropped=False ):
+        x_train1,x_trai2,x_trai3 = compute_mimonet_inputs(x_train,self.input_shapes)
         out_shape = self.outputs_shape[0]
         y_train = y_train if cropped else crop_receptive(y_train, out_shape)
-        return GenericModel.fit( self, x_train,
-                                 {  'la1': y_train,
-                                    'la2': y_train,
-                                    'la3': y_train
+        return GenericModel.fit( self,
+                                 {   'in1': x_train1,
+                                     'in2': x_train2,
+                                     'in3': x_train3
+                                 },
+                                 {   'la1': y_train,
+                                     'la2': y_train,
+                                     'la3': y_train
                                  },
                                  epochs=epochs,
                                  batch_size=batch_size )
 
     def evaluate( self, x_test,  y_test,  batch_size=1, cropped=False ):
+        x_test1,x_test2,x_test3 = compute_mimonet_inputs(x_test,self.input_shapes)
         out_shape = self.outputs_shape[0]
         y_test = y_test if cropped else crop_receptive(y_test, out_shape)
-        return GenericModel.evaluate(self,x_test,
-                                    {  'la1': y_test,
-                                       'la2': y_test,
-                                       'la3': y_test
-                                    }, batch_size=batch_size )
+        return GenericModel.evaluate( self,
+                                     {   'in1': x_test1,
+                                         'in2': x_test2,
+                                         'in3': x_test3
+                                     },
+                                     {   'la1': y_test,
+                                         'la2': y_test,
+                                         'la3': y_test
+                                     }, 
+                                     batch_size=batch_size )
+    
+if __name__=='__main__':
+    mimo = MimoNet([[350,350,3],[175,175,3],[87,87,3]])
+    

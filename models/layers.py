@@ -25,6 +25,7 @@ def crop_concatenate(bigger_input, smaller_input):
     """
     bigger_input_size = bigger_input._keras_shape
     smaller_input_size = smaller_input._keras_shape
+    print('bigger_:{}\nsmaller:{}'.format(bigger_input_size,smaller_input_size))
     cropped_input = crop_to(bigger_input_size,smaller_input_size)(bigger_input)
     return concatenate([cropped_input,smaller_input],axis=3)
 
