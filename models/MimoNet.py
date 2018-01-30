@@ -91,8 +91,13 @@ def define_mimonet_layers(input_shape, classes, regularized=False):
     layers['outputs'] = [ feature_mask(4,256,64,classes,layers['up_path'][2],'la1') ]
     layers['outputs'] += [ feature_mask(2,128,64,classes,layers['up_path'][3],'la2') ]
     layers['outputs'] += [ Conv2D(classes, (1, 1), activation='softmax', name='la3')(layers['up_path'][4]) ]
+    l0 = crop_concatenate(layers['outputs'][0],
+                          layers['outputs'][1])
+    l0 = crop_concatenate(l0,layers['outputs'][2])
+    l0 = crop_concatenate(l0,layers['up_path'][4])
+    l0 = cnv3x3Relu(32,regularized=regularized, padding='same')(l0)
+    layers['outputs'] += [ Conv2D(classes, (1, 1), activation='softmax', name='l0')(l0) ]
     return layers
-
 
 def _to_tensor(x, dtype):
     """Convert the input `x` to a tensor of type `dtype`.
@@ -109,42 +114,64 @@ def _to_tensor(x, dtype):
 
 global la1_counter
 global la2_counter
-la1_counter = 0.0
-la2_counter = 0.0
+global la3_counter
+la1_counter = 1.0
+la2_counter = 1.0
+la3_counter = 1.0
 
-def weighted_categorical_crossentropy(target, output):
-    output /= tf.reduce_sum(output,
-                            len(output.get_shape()) - 1,
-                            True)
-    return - tf.reduce_sum(target * tf.log(output),
-                           len(output.get_shape()) - 1)
+def softmax_categorical_crossentropy(target, output):
+    """Categorical crossentropy between an output tensor and a target tensor.
+    # Arguments
+        target: A tensor of the same shape as `output`.
+        output: result of a softmax, or is a tensor of logits.
+    # Returns
+        Output tensor.
+    """
+    # manual computation of crossentropy
+    return - tf.reduce_sum(target * tf.log(output),len(output.get_shape())-1)
+
+def l0_categorical_crossentropy(target,output):
+    return softmax_categorical_crossentropy(target,output)
 
 def la1_categorical_crossentropy(target,output):
     global la1_counter
-    la1_counter += 1.0
-    return weighted_categorical_crossentropy(target,output)/la1_counter
+    la1_counter += 0.75
+    return softmax_categorical_crossentropy(target,output)/la1_counter
 
 def la2_categorical_crossentropy(target,output):
     global la2_counter
-    la2_counter += 1.0
-    return weighted_categorical_crossentropy(target,output)/la2_counter
+    la2_counter += 0.5
+    return softmax_categorical_crossentropy(target,output)/la2_counter
+
+def la3_categorical_crossentropy(target,output):
+    global la3_counter
+    la3_counter += 0.125
+    return softmax_categorical_crossentropy(target,output)/la3_counter
 
 def define_mimonet_inputs_shapes(input_shape):
     h,w,c = input_shape
     return [ input_shape, [h//2,w//2,c], [h//4,w//4,c] ]
 
 def compute_mimonet_inputs(x,shapes):
-    x1 = resize(x,shapes[1], anti_aliasing=True)
-    x2 = resize(x,shapes[2], anti_aliasing=True)
+    n = x.shape[0]
+    h1,w1,c = shapes[1]
+    h2,w2,c = shapes[2]
+    x1 = np.zeros((n,h1,w1,c), dtype=x.dtype)
+    x2 = np.zeros((n,h2,w2,c), dtype=x.dtype)
+    for i in range(n):
+        x1[i,:,:,:] = resize(x[i,:,:,:],[h1,w1,c])
+        x2[i,:,:,:] = resize(x[i,:,:,:],[h2,w2,c])
     return x,x1,x2
 
 class MimoNet(GenericModel):
     def __init__( self, input_shape, classes=2,
                   regularized = False,
                   loss={'la1': la1_categorical_crossentropy,
-                              'la2': la2_categorical_crossentropy,
-                              'la3': weighted_categorical_crossentropy},
-                  loss_weights={'la1': 1.0, 'la2': 0.7 , 'la3': 0.7 },
+                        'la2': la2_categorical_crossentropy,
+                        'la3': la3_categorical_crossentropy,
+                        'l0' : l0_categorical_crossentropy
+                  },
+                  loss_weights={'la1': 1.0, 'la2': 1.0 , 'la3': 1.0 },
                   metrics=[dice_coef],
                   optimizer=Adam(lr=1e-5) ):
         """
@@ -160,11 +187,11 @@ class MimoNet(GenericModel):
         inputs, outputs = layers['inputs'],layers['outputs']
         GenericModel.__init__(self, inputs, outputs, loss, metrics, optimizer,
                                 loss_weights=loss_weights)
-        print('inputs_shape',self.inputs_shape)
-        print('outputs_shape', self.outputs_shape)
+        #print(self.outputs_shape)
+        #print(self.inputs_shape)
 
     def fit( self, x_train, y_train, batch_size=1, epochs=1, cropped=False ):
-        x_train1,x_trai2,x_trai3 = compute_mimonet_inputs(x_train,self.input_shapes)
+        x_train1,x_train2,x_train3 = compute_mimonet_inputs(x_train,self.inputs_shape)
         out_shape = self.outputs_shape[0]
         y_train = y_train if cropped else crop_receptive(y_train, out_shape)
         return GenericModel.fit( self,
@@ -174,26 +201,40 @@ class MimoNet(GenericModel):
                                  },
                                  {   'la1': y_train,
                                      'la2': y_train,
-                                     'la3': y_train
+                                     'la3': y_train,
+                                      'l0': y_train
                                  },
                                  epochs=epochs,
                                  batch_size=batch_size )
 
     def evaluate( self, x_test,  y_test,  batch_size=1, cropped=False ):
-        x_test1,x_test2,x_test3 = compute_mimonet_inputs(x_test,self.input_shapes)
+        x_test1,x_test2,x_test3 = compute_mimonet_inputs(x_test,self.inputs_shape)
         out_shape = self.outputs_shape[0]
         y_test = y_test if cropped else crop_receptive(y_test, out_shape)
         return GenericModel.evaluate( self,
-                                     {   'in1': x_test1,
-                                         'in2': x_test2,
-                                         'in3': x_test3
-                                     },
-                                     {   'la1': y_test,
-                                         'la2': y_test,
-                                         'la3': y_test
-                                     }, 
-                                     batch_size=batch_size )
+                                         {   'in1': x_test1,
+                                             'in2': x_test2,
+                                             'in3': x_test3
+                                         },
+                                         {   'la1': y_test,
+                                             'la2': y_test,
+                                             'la3': y_test,
+                                              'l0': y_test
+                                         }, 
+                                         batch_size=batch_size )
+    
+    def predict(self, x, batch_size=1, verbose=0):
+        x1,x2,x3 = compute_mimonet_inputs(x,self.inputs_shape)
+        out_shape = self.outputs_shape[0]
+        ys = GenericModel.predict(self,
+                                    {   'in1': x1,
+                                        'in2': x2,
+                                        'in3': x3
+                                    }, 
+                                    batch_size=batch_size, 
+                                    verbose=verbose )
+        return ys[3]
     
 if __name__=='__main__':
-    mimo = MimoNet([[350,350,3],[175,175,3],[87,87,3]])
+    mimo = MimoNet([350,350,3])
     
