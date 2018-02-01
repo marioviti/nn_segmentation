@@ -1,5 +1,6 @@
 from layers import *
 from serialize import *
+from metrics_and_losses import *
 from GenericModel import GenericModel
 
 import numpy as np
@@ -47,16 +48,6 @@ def expand_receptive(batch_y, model_input_shape):
     y_expanded[:, dhq: - (dhq + dhr), dwq: - (dwq + dwr) ] = batch_y
     return y_expanded
 
-def dice_coef(y_true, y_pred):
-    smooth = 1.
-    y_true_f = K.flatten(y_true)
-    y_pred_f = K.flatten(y_pred)
-    intersection = K.sum(y_true_f * y_pred_f)
-    return (2. * intersection + smooth) / (K.sum(y_true_f) + K.sum(y_pred_f) + smooth)
-
-def dice_coef_loss(y_true, y_pred):
-    return -dice_coef(y_true, y_pred)
-
 def define_mimonet_layers(input_shape, classes, regularized=False):
     """
     Use the functional API to define the model
@@ -88,13 +79,15 @@ def define_mimonet_layers(input_shape, classes, regularized=False):
     layers['up_path'][3] = new_up_level(128,layers['up_path'][2],layers['down_path'][3],padding='same',regularized=regularized)
     layers['up_path'][4] = new_up_level(64,layers['up_path'][3],layers['down_path'][4],regularized=regularized)
 
-    layers['outputs'] = [ feature_mask(4,256,64,classes,layers['up_path'][2],'la1') ]
-    layers['outputs'] += [ feature_mask(2,128,64,classes,layers['up_path'][3],'la2') ]
-    layers['outputs'] += [ Conv2D(classes, (1, 1), activation='softmax', name='la3')(layers['up_path'][4]) ]
-    l0 = crop_concatenate(layers['outputs'][0],
-                          layers['outputs'][1])
-    l0 = crop_concatenate(l0,layers['outputs'][2])
-    l0 = crop_concatenate(l0,layers['up_path'][4])
+    auxla1, la1 = feature_mask(4,256,64,classes,layers['up_path'][2],'la1')
+    auxla2, la2 = feature_mask(2,128,64,classes,layers['up_path'][3],'la2')
+    auxla3 = layers['up_path'][4]
+    layers['outputs'] = [ la1,la2 ]
+    layers['outputs'] += [ Conv2D(classes, (1, 1), activation='softmax', name='la3')(auxla3) ]
+    
+    l0 = crop_concatenate(auxla1, auxla2)
+    l0 = crop_concatenate(l0,auxla3)
+    l0 = cnv3x3Relu(64,regularized=regularized, padding='same')(l0)
     l0 = cnv3x3Relu(32,regularized=regularized, padding='same')(l0)
     layers['outputs'] += [ Conv2D(classes, (1, 1), activation='softmax', name='l0')(l0) ]
     return layers
@@ -119,17 +112,6 @@ la1_counter = 1.0
 la2_counter = 1.0
 la3_counter = 1.0
 
-def softmax_categorical_crossentropy(target, output):
-    """Categorical crossentropy between an output tensor and a target tensor.
-    # Arguments
-        target: A tensor of the same shape as `output`.
-        output: result of a softmax, or is a tensor of logits.
-    # Returns
-        Output tensor.
-    """
-    # manual computation of crossentropy
-    return - tf.reduce_sum(target * tf.log(output),len(output.get_shape())-1)
-
 def l0_categorical_crossentropy(target,output):
     return softmax_categorical_crossentropy(target,output)
 
@@ -153,6 +135,10 @@ def define_mimonet_inputs_shapes(input_shape):
     return [ input_shape, [h//2,w//2,c], [h//4,w//4,c] ]
 
 def compute_mimonet_inputs(x,shapes):
+    """
+    MimoNet uses multiple inputs at different scales: this function
+    helps to resize data to fit in each input
+    """
     n = x.shape[0]
     h1,w1,c = shapes[1]
     h2,w2,c = shapes[2]
@@ -187,8 +173,6 @@ class MimoNet(GenericModel):
         inputs, outputs = layers['inputs'],layers['outputs']
         GenericModel.__init__(self, inputs, outputs, loss, metrics, optimizer,
                                 loss_weights=loss_weights)
-        #print(self.outputs_shape)
-        #print(self.inputs_shape)
 
     def fit( self, x_train, y_train, batch_size=1, epochs=1, cropped=False ):
         x_train1,x_train2,x_train3 = compute_mimonet_inputs(x_train,self.inputs_shape)
@@ -234,7 +218,4 @@ class MimoNet(GenericModel):
                                     batch_size=batch_size, 
                                     verbose=verbose )
         return ys[3]
-    
-if __name__=='__main__':
-    mimo = MimoNet([350,350,3])
     

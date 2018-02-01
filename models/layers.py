@@ -53,18 +53,19 @@ def feature_mask(up_factor, up_filters, filters, ouptut_classes, inputs, name,
     """
         Feature mask layer block
     """
-    outputs = upsample( up_filters,
+    aux = upsample( up_filters,
                         kernel = (up_factor,up_factor),
                         strides = (up_factor,up_factor),
                         padding = padding)(inputs)
+    aux = cnv3x3Relu(filters,
+                         padding=padding,
+                         regularized=regularized)(aux)
     outputs = cnv3x3Relu(filters,
                          padding=padding,
-                         regularized=regularized)(outputs)
-    outputs = cnv3x3Relu(filters,
-                         padding=padding,
-                         regularized=regularized)(outputs)
+                         regularized=regularized)(aux)
     outputs = Conv2D(ouptut_classes, (1, 1), activation='softmax', name=name)(outputs)
-    return outputs
+    print('aux confirmed')
+    return aux, outputs
 
 def new_down_level(filters, inputs, regularized=False, padding='valid'):
     """

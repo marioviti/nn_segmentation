@@ -32,7 +32,7 @@ def evaluate(model,dataset,n_batch=10):
     y_ = crop_receptive(y_,y_hat.shape[1:3])
     return x_,y_,y_hat
 
-def train(model,dataset, epochs=10, n_batch=10, use_weights=False, W=10, just_train=True):
+def train(model,dataset, epochs=10, n_batch=10, use_weights=False, W=10, just_train=True, rotate=False):
     train_metrics = []
     eval_metrics = []
 
@@ -40,7 +40,7 @@ def train(model,dataset, epochs=10, n_batch=10, use_weights=False, W=10, just_tr
     for i in range(epochs):
         print("=========== iteration {}/{} =============".format(i+1,epochs))
 
-        x_train,y_train,w_train = dataset.sample_X_Y_W_patch_batch([h,w],n_batch=n_batch, rotate=False)
+        x_train,y_train,w_train = dataset.sample_X_Y_W_patch_batch([h,w],n_batch=n_batch,rotate=rotate)
         if use_weights:
             y_train = combine_y_w(y_train,w_train*W)    
         train_history = model.fit(x_train,y_train)
