@@ -12,6 +12,7 @@ from keras.optimizers import SGD,Adam
 from keras.layers import ZeroPadding2D
 
 from skimage.transform import resize
+from scipy.ndimage.filters import gaussian_filter
 import tensorflow as tf
 
 K.set_image_data_format('channels_last')
@@ -145,8 +146,8 @@ def compute_mimonet_inputs(x,shapes):
     x1 = np.zeros((n,h1,w1,c), dtype=x.dtype)
     x2 = np.zeros((n,h2,w2,c), dtype=x.dtype)
     for i in range(n):
-        x1[i,:,:,:] = resize(x[i,:,:,:],[h1,w1,c])
-        x2[i,:,:,:] = resize(x[i,:,:,:],[h2,w2,c])
+        x1[i,:,:,:] = resize(gaussian_filter(x[i,:,:,:],1),[h1,w1,c])
+        x2[i,:,:,:] = resize(gaussian_filter(x1[i,:,:,:],1),[h2,w2,c])
     return x,x1,x2
 
 class MimoNet(GenericModel):

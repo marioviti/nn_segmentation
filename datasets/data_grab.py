@@ -16,6 +16,6 @@ def unzip(filename=downloaded_data_path):
     a = zipfile.ZipFile(filename)
     a.extractall()
 
-def dwuzp():
-    download()
+def dwuzp(path='./'):
+    download(output=path)
     unzip()

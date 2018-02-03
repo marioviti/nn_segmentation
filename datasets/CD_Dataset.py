@@ -186,10 +186,10 @@ class Data_Sampler():
         
         refused = True
         i = 0
-        while(refused and i<10):
+        while(refused and i<20):
             patch_ax, patch_ay, patch_aw = sample_patches([X,Y,W],h,w,offset_h=offset_h,offset_w=offset_w)
             patch_ax, patch_ay, patch_aw = patch_ax/255., patch_ay/((256.0/(cy-1.0))-1.0), patch_aw/255.
-            refused = refuse_batch(patch_ay)
+            refused = refuse_batch(patch_ay,threshold=0.05)
             i += 1
   
         patch_ay = to_categorical(patch_ay, num_classes=cy)
@@ -199,6 +199,7 @@ class Data_Sampler():
         return np.expand_dims(patch_ax, axis=0), np.expand_dims(patch_ay, axis=0), np.expand_dims(patch_aw, axis=0)
 
     def sample_X_Y_W_patch_batch(self, patch_size, n_batch=10,
+                                     index=None,
                                      offsets = [None,None],
                                      rotate=True,
                                      train=True, fit=True,
@@ -208,7 +209,9 @@ class Data_Sampler():
                 patch_size (tuple) : h, w height and width window patch sizes
         """
         assert(n_batch>0)
-        idx = self.get_curr_index(train=train) if same else (self.get_random_index(train=train) \
+        idx = index
+        if idx == None:
+            idx = self.get_curr_index(train=train) if same else (self.get_random_index(train=train) \
                                         if shuffle else self.get_next_index(train=train))
         
         datax = np.array(self.train_x[idx] if train else self.eval_x[idx] )
@@ -241,7 +244,7 @@ class CD_Dataset():
         """
         if (not os.path.exists(path)) and download:
             print( 'Downloading CD_Dataset' )
-            dwuzp()
+            dwuzp(path=path)
         self.loader = Dataset_Loader(path,train_y_path=train_y_path,eval_y_path=eval_y_path)
         train_x, train_w, train_y, eval_x, eval_w, eval_y = self.loader.get_data_all()
         self.sampler = Data_Sampler( train_x, train_w, train_y,

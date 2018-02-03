@@ -3,6 +3,11 @@ from preprocessing import morphological_weights, save_image
 import numpy as np
 import os
 
+"""
+Use this script to compute morphological distance within cells.
+set the paths and run it.
+"""
+
 default_path = "../CD_Dataset"
 default_train_output_path = "train_w"
 default_eval_output_path = "eval_w"

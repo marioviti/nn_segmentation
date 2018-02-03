@@ -10,9 +10,10 @@ import os
 
 import string
 import time
+import sys
 
 import random
-from utility import train, train_and_save, predictBatchXYandShow
+from utility import train
 
 seed = int((time.time()*1e6)%1e6)
 np.random.seed(seed)
@@ -42,7 +43,13 @@ N_PATCH_BATCH = 10
 global INPUT_PATCH_SIZE
 global INPUT_CHANNELS
 global OUTPUT_CHANNELS
+global MIMO
+global UNET
+global MODEL
 
+MIMO = 0
+UNET = 1
+MODEL = MIMO
 INPUT_PATCH_SIZE = [350,350]
 INPUT_CHANNELS = [3]
 OUTPUT_CHANNELS = [2]
@@ -60,6 +67,9 @@ def main():
     global EPOCHS
     global N_PATCH_BATCH
     global IMAGE_INDEX
+    global MIMO
+    global UNET
+    global MODEL
 
     global INPUT_PATCH_SIZE
     global INPUT_CHANNELS
@@ -75,6 +85,8 @@ def main():
                         help="specify an image for testing", type=int)
     parser.add_argument("-epc","--epochs",
                         help="number of epochs", type=int, default=EPOCHS)
+    parser.add_argument("-md","--model",
+                        help="model: 0:Unet or 1:Mimo", type=int, default=MIMO)
     parser.add_argument("-btc","--n_batch",
                         help="number of examples per batch", type=int, default=N_PATCH_BATCH)
     parser.add_argument("-ldmd","--load_model",
@@ -87,6 +99,7 @@ def main():
     EPOCHS = args.epochs
     N_PATCH_BATCH = args.n_batch
     MODEL_TESTING_SESSION = args.testing
+    MODEL = args.model
     if args.image_index is not None and MODEL_TESTING_SESSION:
         IMAGE_INDEX = args.image_index
     else:
@@ -102,31 +115,29 @@ def main():
 
 def run_model():
     # Running the model
-    datamanager = CD_Dataset( path=DATASET_PATH, download=True, num_classes=OUTPUT_CHANNELS[0] )
-
-    model_input_path = INPUT_PATCH_SIZE + INPUT_CHANNELS
-    unet = MimoNet(model_input_path, classes=OUTPUT_CHANNELS[0])
+    dataset = CD_Dataset( path=DATASET_PATH, 
+                          download=True, 
+                          fit=True, num_classes=OUTPUT_CHANNELS[0] )
+    
+    model_input_size = INPUT_PATCH_SIZE + INPUT_CHANNELS
+    if MODEL == MIMO:
+        model = MimoNet(model_input_size, classes=output_channels[0], regularized=True)
+    elif MODEL == UNET:
+        model = Unet(model_input_size, classes=output_channels[0], regularized=True)
+    else:
+        print('CHOOSE MODEL: 0:MIMO, 1:UNET')
+        sys.exit(0)
 
     if LOAD_MODEL:
         print("loading model " + MODEL_PATH_NAME + " from disk.")
-        unet.load_model(MODEL_PATH_NAME)
+        model.load_model(MODEL_PATH_NAME)
 
     if MODEL_TRAINING_SESSION:
         print("trainig model")
-        print
-        train_and_save(unet,datamanager,MODEL_PATH_NAME,epochs=EPOCHS, n_batch=N_PATCH_BATCH)
+        train(model, dataset, 
+              epochs=EPOCHS, n_batch=N_PATCH_BATCH, 
+              use_weights=True, name=MODEL_PATH_NAME)
         print("saving model " + MODEL_PATH_NAME + " to disk.")
-        unet.save_model(MODEL_PATH_NAME)
-
-    elif MODEL_TESTING_SESSION:
-        print('testing model')
-        if IMAGE_INDEX > -1:
-            pass
-            #predictXYandShow(unet, datamanager, IMAGE_INDEX)
-        else:
-            predictBatchXYandShow(unet, datamanager, n_batch=N_PATCH_BATCH)
-    else:
-        print("no mode selected: add option --help to see mode options.")
 
 if __name__ == '__main__':
     main()
