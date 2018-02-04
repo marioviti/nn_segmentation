@@ -27,8 +27,15 @@ def precision(y_true, y_pred):
      return true_pos(y_true, y_pred) / \
          (true_pos(y_true, y_pred) + false_pos(y_true, y_pred))
 
-def Pc(Y,Y_hat,tetha=5):
+def Pc(Yor,Y_hator,tetha=5,c=1.0):
+    Y = np.copy(Yor)
+    Y_hat = np.copy(Y_hator)
+    Y[Y!=c] = 0
+    Y[Y==c] = 1.0
+    Y_hat[Y_hat!=c] = 0
+    Y_hat[Y_hat==c] = 1.0
     Bgt = Y - binary_erosion(Y,structure=np.ones((3,3)))
+    fig = matplotlib.pyplot.gcf()
     Bps = Y_hat - binary_erosion(Y_hat,structure=np.ones((3,3)))
     D = distance_transform_edt(1-Bgt)
     D_Bpd = D[Bps==1.0]
