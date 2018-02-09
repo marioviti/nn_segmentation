@@ -244,6 +244,7 @@ class CD_Dataset():
         """
         if (not os.path.exists(path)) and download:
             print( 'Downloading CD_Dataset' )
+            os.mkdir(path)
             dwuzp(path=path)
         self.loader = Dataset_Loader(path,train_y_path=train_y_path,eval_y_path=eval_y_path)
         train_x, train_w, train_y, eval_x, eval_w, eval_y = self.loader.get_data_all()

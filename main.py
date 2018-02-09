@@ -46,11 +46,12 @@ global OUTPUT_CHANNELS
 global MIMO
 global UNET
 global MODEL
+global SPATCH
 
 MIMO = 0
 UNET = 1
 MODEL = MIMO
-INPUT_PATCH_SIZE = [350,350]
+SPATCH = 200
 INPUT_CHANNELS = [3]
 OUTPUT_CHANNELS = [2]
 
@@ -70,6 +71,7 @@ def main():
     global MIMO
     global UNET
     global MODEL
+    global SPATCH
 
     global INPUT_PATCH_SIZE
     global INPUT_CHANNELS
@@ -83,6 +85,8 @@ def main():
                         help="specify if testing session", action="store_true")
     parser.add_argument("-imid","--image_index",
                         help="specify an image for testing", type=int)
+    parser.add_argument("-sp","--spatch",
+                        help="size of patch", type=int, default=SPATCH)
     parser.add_argument("-epc","--epochs",
                         help="number of epochs", type=int, default=EPOCHS)
     parser.add_argument("-md","--model",
@@ -95,6 +99,7 @@ def main():
 
     # Passing arguments to session
     args = parser.parse_args()
+    SPATCH = args.spatch
     MODEL_TRAINING_SESSION = args.training
     EPOCHS = args.epochs
     N_PATCH_BATCH = args.n_batch
@@ -117,13 +122,16 @@ def run_model():
     # Running the model
     dataset = CD_Dataset( path=DATASET_PATH, 
                           download=True, 
-                          fit=True, num_classes=OUTPUT_CHANNELS[0] )
+                          fit=False, num_classes=OUTPUT_CHANNELS[0] )
+    dataset.mean_features = np.array([0.5,0.5,0.5])
+    dataset.std_features = np.array([0.5,0.5,0.5])
     
+    INPUT_PATCH_SIZE = [SPATCH,SPATCH]
     model_input_size = INPUT_PATCH_SIZE + INPUT_CHANNELS
     if MODEL == MIMO:
-        model = MimoNet(model_input_size, classes=output_channels[0], regularized=True)
+        model = MimoNet(model_input_size, classes=OUTPUT_CHANNELS[0], regularized=True)
     elif MODEL == UNET:
-        model = Unet(model_input_size, classes=output_channels[0], regularized=True)
+        model = Unet(model_input_size, classes=OUTPUT_CHANNELS[0], regularized=True)
     else:
         print('CHOOSE MODEL: 0:MIMO, 1:UNET')
         sys.exit(0)

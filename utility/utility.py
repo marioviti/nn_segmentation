@@ -47,7 +47,7 @@ def evaluate(model,dataset,n_batch=10, train=False):
     return x_,y_,y_hat
 
 def train(model,dataset, epochs=10, n_batch=10, 
-          use_weights=False, W=10, just_train=True, rotate=False, 
+          use_weights=False, W=20, just_train=True, rotate=False, 
           name=None,
           train_metrics=[],eval_metrics=[] ):
 
