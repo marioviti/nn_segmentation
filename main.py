@@ -129,8 +129,10 @@ def run_model():
     INPUT_PATCH_SIZE = [SPATCH,SPATCH]
     model_input_size = INPUT_PATCH_SIZE + INPUT_CHANNELS
     if MODEL == MIMO:
+        MODEL_PATH_NAME = 'MIMO_'+MODEL_PATH_NAME
         model = MimoNet(model_input_size, classes=OUTPUT_CHANNELS[0], regularized=True)
     elif MODEL == UNET:
+        MODEL_PATH_NAME = 'UNET_'+MODEL_PATH_NAME
         model = Unet(model_input_size, classes=OUTPUT_CHANNELS[0], regularized=True)
     else:
         print('CHOOSE MODEL: 0:MIMO, 1:UNET')

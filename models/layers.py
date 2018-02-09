@@ -64,7 +64,6 @@ def feature_mask(up_factor, up_filters, filters, ouptut_classes, inputs, name,
                          padding=padding,
                          regularized=regularized)(aux)
     outputs = Conv2D(ouptut_classes, (1, 1), activation='softmax', name=name)(outputs)
-    print('aux confirmed')
     return aux, outputs
 
 def new_down_level(filters, inputs, regularized=False, padding='valid'):

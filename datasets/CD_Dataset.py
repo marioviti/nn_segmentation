@@ -155,8 +155,6 @@ class Data_Sampler():
             datax = datax**2
             self.std_features += np.sum(datax,axis=(0,1))
         self.std_features /= (N*H*W*1.0-1.0)
-        print("mean_features: ",self.mean_features)
-        print("std_features: ",self.std_features)
         self.fitted = True
 
     def get_X_Y_W(self, index=None, shuffle=True, train=True, rotated=True):
@@ -223,6 +221,12 @@ class Data_Sampler():
 
         batch_x, batch_y, batch_w  = self.sample_X_Y_W_patches(patch_size,datax,datay,dataw,fit=fit,offsets=offsets)
         for i in range(1,n_batch):
+            if shuffle:
+                idx = self.get_curr_index(train=train) if same else (self.get_random_index(train=train) \
+                                            if shuffle else self.get_next_index(train=train))
+                datax = np.array(self.train_x[idx] if train else self.eval_x[idx] )
+                datay = np.array(self.train_y[idx] if train else self.eval_y[idx] )
+                dataw = np.array(self.train_w[idx] if train else self.eval_w[idx] )
             patch_x, patch_y, patch_w = self.sample_X_Y_W_patches(patch_size,datax,datay,dataw,fit=fit,offsets=offsets)
             batch_x = np.concatenate( (batch_x,patch_x), axis=0 )
             batch_w = np.concatenate( (batch_w,patch_w), axis=0 )
