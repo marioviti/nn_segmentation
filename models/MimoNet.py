@@ -8,7 +8,8 @@ import numpy as np
 from keras import backend as K
 from keras.losses import binary_crossentropy, categorical_crossentropy
 from keras.utils import to_categorical
-from keras.optimizers import SGD,Adam
+from keras.optimizers import SGD,Adam,Adagrad,RMSprop,Adadelta
+# https://keras.io/optimizers/
 from keras.layers import ZeroPadding2D
 
 from skimage.transform import resize
@@ -160,7 +161,7 @@ class MimoNet(GenericModel):
                   },
                   loss_weights={'la1': 1.0, 'la2': 1.0 , 'la3': 1.0 },
                   metrics=[dice_coef],
-                  optimizer=Adam(lr=1e-5) ):
+                  optimizer=Adadelta() ):
         """
         params:
             inputs_shape: (tuple) channels_last (h,w,c) of input image.

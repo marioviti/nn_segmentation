@@ -35,8 +35,7 @@ def Pc(Yor,Y_hator,tetha=5,c=1.0):
     Y_hat[Y_hat!=c] = 0
     Y_hat[Y_hat==c] = 1.0
     Bgt = Y - binary_erosion(Y,structure=np.ones((3,3)))
-    fig = matplotlib.pyplot.gcf()
     Bps = Y_hat - binary_erosion(Y_hat,structure=np.ones((3,3)))
     D = distance_transform_edt(1-Bgt)
     D_Bpd = D[Bps==1.0]
-    return np.sum(D_Bpd<tetha)/(float(np.sum(Bgt==1.0)) + 1)
+    return np.sum(D_Bpd<tetha)/(float(np.sum(Bps==1.0)) + 1)
